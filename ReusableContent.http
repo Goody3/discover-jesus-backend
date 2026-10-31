@@ -1,0 +1,111 @@
+@baseUrl = http://localhost:5187
+@locale = en
+@pageId = 00000000-0000-0000-0000-000000000001
+@componentId = 00000000-0000-0000-0000-000000000002
+@unusedComponentId = 00000000-0000-0000-0000-000000000003
+
+### Find pages and copy a page's publicId into @pageId
+GET {{baseUrl}}/api/pages/
+
+### List reusable components by friendly name
+GET {{baseUrl}}/api/reusable-components
+
+### Create a reusable component and initial locale draft
+# Copy componentId from the response into @componentId for the following requests.
+POST {{baseUrl}}/api/reusable-components
+Content-Type: application/json
+
+{
+  "name": "Welcome card",
+  "locale": "{{locale}}",
+  "content": {
+    "type": "stack",
+    "children": [
+      {
+        "type": "text",
+        "value": "Reusable content"
+      }
+    ]
+  }
+}
+
+### Rename a reusable component
+PUT {{baseUrl}}/api/reusable-components/{{componentId}}
+Content-Type: application/json
+
+{
+  "name": "Welcome panel"
+}
+
+### Read a reusable component draft
+GET {{baseUrl}}/api/reusable-components/{{componentId}}/draft?locale={{locale}}
+
+### Replace a reusable component draft
+PUT {{baseUrl}}/api/reusable-components/{{componentId}}/draft?locale={{locale}}
+Content-Type: application/json
+
+{
+  "content": {
+    "type": "stack",
+    "children": [
+      {
+        "type": "text",
+        "value": "Updated reusable content"
+      }
+    ]
+  }
+}
+
+### Publish a reusable component draft
+POST {{baseUrl}}/api/reusable-components/{{componentId}}/publish?locale={{locale}}
+
+### Read the latest published reusable component revision
+GET {{baseUrl}}/api/reusable-components/{{componentId}}?locale={{locale}}
+
+### Save a page-content draft that references a reusable component
+PUT {{baseUrl}}/api/content/pages/{{pageId}}/draft?locale={{locale}}
+Content-Type: application/json
+
+{
+  "sections": [
+    {
+      "type": "componentReference",
+      "componentId": "{{componentId}}"
+    }
+  ]
+}
+
+### Read the page-content draft
+GET {{baseUrl}}/api/content/pages/{{pageId}}/draft?locale={{locale}}
+
+### Start a page-content draft from its latest published revision
+# Conflicts if a draft already exists; load and edit that draft instead.
+POST {{baseUrl}}/api/content/pages/{{pageId}}/draft/from-published?locale={{locale}}
+
+### Publish the page-content draft
+POST {{baseUrl}}/api/content/pages/{{pageId}}/publish?locale={{locale}}
+
+### Read the published page with reusable components expanded
+GET {{baseUrl}}/api/content/pages/{{pageId}}?locale={{locale}}
+
+### Create an unreferenced component for withdrawal and deletion
+# Copy componentId from the response into @unusedComponentId.
+POST {{baseUrl}}/api/reusable-components
+Content-Type: application/json
+
+{
+  "name": "Disposable component",
+  "locale": "{{locale}}",
+  "content": {
+    "type": "text",
+    "value": "Disposable component"
+  }
+}
+
+### Withdraw an unreferenced reusable component
+# This conflicts if any saved page draft or revision references the component.
+POST {{baseUrl}}/api/reusable-components/{{unusedComponentId}}/withdraw
+
+### Delete an unreferenced reusable component
+# This conflicts if any saved page draft or revision references the component.
+DELETE {{baseUrl}}/api/reusable-components/{{unusedComponentId}}

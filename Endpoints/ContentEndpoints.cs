@@ -112,7 +112,12 @@ public static class ContentEndpoints
     {
         var pages = await db.Pages.AsNoTracking()
             .OrderBy(page => page.Slug)
-            .Select(page => new PageSummary(page.Id, page.Slug, page.Title, page.IsPublished))
+            .Select(page => new PageSummary(
+                page.Id,
+                page.PublicId,
+                page.Slug,
+                page.Title,
+                page.IsPublished))
             .ToListAsync(cancellationToken);
         return Results.Ok(pages);
     }
@@ -646,10 +651,10 @@ public static class ContentEndpoints
     }
 
     private static PageSummary ToSummary(Page page) =>
-        new(page.Id, page.Slug, page.Title, page.IsPublished);
+        new(page.Id, page.PublicId, page.Slug, page.Title, page.IsPublished);
 
     private static PageResponse ToResponse(Page page) =>
-        new(page.Id, page.Slug, page.Title, page.IsPublished,
+        new(page.Id, page.PublicId, page.Slug, page.Title, page.IsPublished,
             page.Components.OrderBy(component => component.SortOrder).Select(ToResponse).ToList());
 
     private static ComponentResponse ToResponse(Component component) =>
