@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DiscoverJesus.Api</RootNamespace>
     <UserSecretsId>27576aa0-6da9-415b-924b-710a08a0717c</UserSecretsId>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
