@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Start SQL Server container
+        run: |
+          # Throwaway password for an ephemeral container; masked in logs and never stored.
+          password="Aa1!$(openssl rand -hex 12)"
+          echo "::add-mask::$password"
+          docker run -d --name ci-sqlserver -p 1433:1433 \
+            -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" \
+            mcr.microsoft.com/mssql/server:2022-latest
+          echo "ConnectionStrings__DefaultConnection=Server=localhost,1433;Database=DiscoverJesusCi;User Id=sa;Password=$password;TrustServerCertificate=True" >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: |
+          dotnet restore DiscoverJesus.Api.csproj
+          dotnet restore Tests/DiscoverJesus.Api.Tests.csproj
+          dotnet tool restore
+
+      - name: Build
+        run: dotnet build Tests/DiscoverJesus.Api.Tests.csproj --no-restore --configuration Release
+
+      - name: Wait for SQL Server
+        run: |
+          for attempt in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then
+              echo "SQL Server is accepting connections."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs ci-sqlserver | tail -n 50
+          echo "SQL Server did not become ready." >&2
+          exit 1
+
+      - name: Test
+        run: dotnet test Tests/DiscoverJesus.Api.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/test-results.trx"
+          if-no-files-found: ignore
+
+      - name: Check for pending EF Core model changes
+        run: dotnet dotnet-ef migrations has-pending-model-changes --project DiscoverJesus.Api.csproj
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Scan NuGet packages for known vulnerabilities
+        run: |
+          for project in DiscoverJesus.Api.csproj Tests/DiscoverJesus.Api.Tests.csproj; do
+            echo "::group::$project"
+            dotnet list "$project" package --vulnerable --include-transitive 2>&1 | tee -a scan.txt
+            echo "::endgroup::"
+          done
+          # Fail only on High or Critical findings; lower severities are reported above.
+          if grep -E '^\s*>.*\b(High|Critical)\b' scan.txt; then
+            echo "::error::Vulnerable packages with High or Critical severity were found."
+            exit 1
+          fi
