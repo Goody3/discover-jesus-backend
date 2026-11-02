@@ -104,3 +104,28 @@ configurations are not transformed by those schema migrations. See
 [ReusableContent.http](ReusableContent.http) for example requests and
 [the service tests](Tests/ReusableContentServiceTests.cs) for covered lifecycle,
 naming, and validation behavior.
+## Continuous integration
+
+The [CI workflow](.github/workflows/ci.yml) runs on pull requests targeting
+`dev` or `main` and on pushes to those branches. It builds the API and tests,
+runs the tests with a SQL Server container available through
+`ConnectionStrings__DefaultConnection`, fails if the EF Core model has changes
+without a migration, and scans NuGet packages (including transitive ones) for
+known vulnerabilities. Vulnerabilities of High or Critical severity fail the
+build; lower severities are reported only. The workflow generates a throwaway
+database password at run time and needs no repository secrets.
+
+Run the same checks locally:
+
+```sh
+dotnet test Tests/DiscoverJesus.Api.Tests.csproj
+dotnet tool restore
+dotnet dotnet-ef migrations has-pending-model-changes --project DiscoverJesus.Api.csproj
+dotnet list DiscoverJesus.Api.csproj package --vulnerable --include-transitive
+dotnet list Tests/DiscoverJesus.Api.Tests.csproj package --vulnerable --include-transitive
+```
+
+`has-pending-model-changes` needs `ConnectionStrings__DefaultConnection` set to
+any well-formed value; it does not connect to the database. The current tests use
+the EF Core in-memory provider. Tests that require SQL Server should read the
+connection string from that variable.
