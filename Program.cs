@@ -1,5 +1,6 @@
 using DiscoverJesus.Api;
 using DiscoverJesus.Api.Data;
+using DiscoverJesus.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 
@@ -14,6 +15,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddDbContext<DiscoverJesusDbContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddScoped<IReusableContentService, ReusableContentService>();
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -22,12 +25,13 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Discover Jesus Content API",
         Version = "v1",
-        Description = "Serves and manages dynamic pages, components, data bindings, and action definitions."
+        Description = "Serves and manages pages, reusable components, data bindings, and action definitions."
     });
 });
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
@@ -35,6 +39,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
     .WithTags("Health")
     .WithSummary("Check API availability");
 app.MapContentEndpoints();
+app.MapReusableContentEndpoints();
 
 app.Run();
 
