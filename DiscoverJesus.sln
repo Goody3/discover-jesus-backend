@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiscoverJesus.Api", "DiscoverJesus.Api.csproj", "{906BC18C-FAD4-4DD3-88E3-026C38D0CBBC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiscoverJesus.Api.Tests", "Tests\DiscoverJesus.Api.Tests.csproj", "{11CADA18-EE73-424F-8542-3D08463C76AA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{906BC18C-FAD4-4DD3-88E3-026C38D0CBBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{906BC18C-FAD4-4DD3-88E3-026C38D0CBBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{906BC18C-FAD4-4DD3-88E3-026C38D0CBBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{906BC18C-FAD4-4DD3-88E3-026C38D0CBBC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11CADA18-EE73-424F-8542-3D08463C76AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11CADA18-EE73-424F-8542-3D08463C76AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11CADA18-EE73-424F-8542-3D08463C76AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11CADA18-EE73-424F-8542-3D08463C76AA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

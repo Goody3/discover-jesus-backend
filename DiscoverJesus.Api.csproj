@@ -5,11 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DiscoverJesus.Api</RootNamespace>
     <UserSecretsId>27576aa0-6da9-415b-924b-710a08a0717c</UserSecretsId>
-    <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**;Tests/**/*.cs</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Tests/**/*.cs" />
     <Content Remove="Tests/**" />
     <None Remove="Tests/**" />
   </ItemGroup>

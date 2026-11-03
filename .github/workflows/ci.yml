@@ -39,12 +39,11 @@ jobs:
 
       - name: Restore
         run: |
-          dotnet restore DiscoverJesus.Api.csproj
-          dotnet restore Tests/DiscoverJesus.Api.Tests.csproj
+          dotnet restore DiscoverJesus.sln
           dotnet tool restore
 
       - name: Build
-        run: dotnet build Tests/DiscoverJesus.Api.Tests.csproj --no-restore --configuration Release
+        run: dotnet build DiscoverJesus.sln --no-restore --configuration Release
 
       - name: Wait for SQL Server
         run: |
@@ -60,7 +59,7 @@ jobs:
           exit 1
 
       - name: Test
-        run: dotnet test Tests/DiscoverJesus.Api.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test DiscoverJesus.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
 
       - name: Upload test results
         if: always()

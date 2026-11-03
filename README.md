@@ -119,14 +119,45 @@ database password at run time and needs no repository secrets.
 Run the same checks locally:
 
 ```sh
-dotnet test Tests/DiscoverJesus.Api.Tests.csproj
+dotnet test DiscoverJesus.sln
 dotnet tool restore
 dotnet dotnet-ef migrations has-pending-model-changes --project DiscoverJesus.Api.csproj
 dotnet list DiscoverJesus.Api.csproj package --vulnerable --include-transitive
 dotnet list Tests/DiscoverJesus.Api.Tests.csproj package --vulnerable --include-transitive
 ```
 
-`has-pending-model-changes` needs `ConnectionStrings__DefaultConnection` set to
-any well-formed value; it does not connect to the database. The current tests use
-the EF Core in-memory provider. Tests that require SQL Server should read the
-connection string from that variable.
+The integration tests use a fresh, disposable database per test on a SQL Server
+instance. To run them locally with Docker, generate a throwaway password in the
+shell, start a local SQL Server container, and set its connection string:
+
+```sh
+export MSSQL_SA_PASSWORD="Aa1_$(openssl rand -hex 16)"
+docker run --name discover-jesus-test-sqlserver -d -p 1433:1433 \
+  -e ACCEPT_EULA=Y --env MSSQL_SA_PASSWORD \
+  mcr.microsoft.com/mssql/server:2022-latest
+for attempt in $(seq 1 30); do
+  if docker exec discover-jesus-test-sqlserver bash -c 'exec 3<>/dev/tcp/127.0.0.1/1433' 2>/dev/null; then
+    break
+  fi
+  sleep 2
+done
+export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=DiscoverJesusCi;User Id=sa;Password=$MSSQL_SA_PASSWORD;TrustServerCertificate=True"
+dotnet test DiscoverJesus.sln
+```
+
+The test host ignores the configured catalog and creates uniquely named
+`DiscoverJesusTest_...` databases, then drops each database when its test
+finishes. It refuses to run unless the configured catalog is exactly
+`DiscoverJesusCi`, to avoid modifying a developer or production database. Stop
+and remove the local container when finished:
+
+```sh
+docker rm -f discover-jesus-test-sqlserver
+unset MSSQL_SA_PASSWORD ConnectionStrings__DefaultConnection
+```
+
+`dotnet dotnet-ef migrations has-pending-model-changes` needs
+`ConnectionStrings__DefaultConnection` set to any well-formed value; it does
+not connect to the database. The existing service unit tests continue using EF
+Core InMemory; endpoint integration tests run through `WebApplicationFactory`
+against SQL Server.
