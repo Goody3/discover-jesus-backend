@@ -104,6 +104,7 @@ configurations are not transformed by those schema migrations. See
 [ReusableContent.http](ReusableContent.http) for example requests and
 [the service tests](Tests/ReusableContentServiceTests.cs) for covered lifecycle,
 naming, and validation behavior.
+
 ## Continuous integration
 
 The [CI workflow](.github/workflows/ci.yml) runs on pull requests targeting
