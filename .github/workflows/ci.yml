@@ -59,14 +59,45 @@ jobs:
           exit 1
 
       - name: Test
-        run: dotnet test DiscoverJesus.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test DiscoverJesus.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --results-directory TestResults
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: "**/test-results.trx"
+          path: "TestResults/**/*.trx"
+          if-no-files-found: ignore
+
+      - name: Summarize coverage
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          reports = sorted(Path("TestResults").glob("*/coverage.cobertura.xml"))
+          if not reports:
+              raise SystemExit("No Cobertura coverage report was generated.")
+
+          summary = ["## Backend test coverage", ""]
+          for report in reports:
+              root = ElementTree.parse(report).getroot()
+              line_rate = float(root.attrib["line-rate"])
+              summary.append(f"- Line coverage: **{line_rate:.1%}**")
+              summary.append(f"- Report: `{report}`")
+          text = "\n".join(summary) + "\n"
+          print(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write(text)
+          PY
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: "TestResults/*/coverage.cobertura.xml"
           if-no-files-found: ignore
 
       - name: Check for pending EF Core model changes
