@@ -113,13 +113,16 @@ runs the tests with a SQL Server container available through
 `ConnectionStrings__DefaultConnection`, fails if the EF Core model has changes
 without a migration, and scans NuGet packages (including transitive ones) for
 known vulnerabilities. Vulnerabilities of High or Critical severity fail the
-build; lower severities are reported only. The workflow generates a throwaway
-database password at run time and needs no repository secrets.
+build; lower severities are reported only. It also collects line coverage,
+prints the percentage in the workflow summary, and uploads the Cobertura report
+as an artifact. No coverage threshold is enforced until the platform owner
+approves one. The workflow generates a throwaway database password at run time
+and needs no repository secrets.
 
 Run the same checks locally:
 
 ```sh
-dotnet test DiscoverJesus.sln
+dotnet test DiscoverJesus.sln --collect:"XPlat Code Coverage"
 dotnet tool restore
 dotnet dotnet-ef migrations has-pending-model-changes --project DiscoverJesus.Api.csproj
 dotnet list DiscoverJesus.Api.csproj package --vulnerable --include-transitive
