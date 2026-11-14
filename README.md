@@ -20,6 +20,14 @@ Swagger UI is available at `/swagger`; the live OpenAPI document is at
 `/swagger/v1/swagger.json`, generated from the registered API endpoints. The
 checked-in snapshot is [api/openapi.json](api/openapi.json).
 
+Successful response DTOs explicitly list every serialized property as required
+in OpenAPI, including `false`, zero, empty collections, and opaque JSON values.
+[ResponseSchemaFilter](Contracts/ResponseSchemaFilter.cs) is limited to the
+named output DTOs; it does not change request validation, error responses, or
+JSON serialization settings. Contract tests check these required fields against
+the application's HTTP JSON serializer. `/health` documents its existing
+`{ "status": "healthy" }` response through a named DTO.
+
 ## Data model
 
 - **Pages** have unique URL slugs, titles, and a publication flag.
@@ -55,6 +63,7 @@ All resource endpoints are under `/api`.
 | --- | --- | --- |
 | GET | `/pages` | List page summaries |
 | GET | `/pages/{slug}` | Get a page with components, bindings, and actions |
+| GET | `/pages/by-public-id/{pageId}` | Get the same management page by public UUID, including unpublished pages |
 | POST, PUT, DELETE | `/pages`, `/pages/{id}` | Create, update, or delete a page |
 | GET, POST | `/pages/{pageId}/components` | List or add page components |
 | GET, PUT, DELETE | `/components/{id}` | Get, update, or delete a component |
@@ -79,6 +88,14 @@ Create and update endpoints accept JSON. `props` and `config` are arbitrary JSON
 values and are returned as JSON values, not escaped JSON strings. Missing resources
 return `404`, duplicate slugs or parent-scoped names return `409`, and invalid
 fields return `400`.
+
+The UUID management lookup returns `PageResponse`, including inline components,
+bindings, and actions in the same order as slug lookup. It is not localized
+published-content delivery, and it does not require the page to be published.
+Page creation now points its `Location` header to this stable UUID lookup;
+mutation routes still use integer IDs, and slugs remain editable page fields.
+The slug lookup is retained without deprecation signals pending an approved
+consumer migration, notice/monitoring policy, and removal decision.
 
 Reusable-component names are trimmed, limited to 200 characters, and unique
 across the entire library without regard to case. Withdrawn components retain
@@ -113,13 +130,16 @@ runs the tests with a SQL Server container available through
 `ConnectionStrings__DefaultConnection`, fails if the EF Core model has changes
 without a migration, and scans NuGet packages (including transitive ones) for
 known vulnerabilities. Vulnerabilities of High or Critical severity fail the
-build; lower severities are reported only. The workflow generates a throwaway
-database password at run time and needs no repository secrets.
+build; lower severities are reported only. It also collects line coverage,
+prints the percentage in the workflow summary, and uploads the Cobertura report
+as an artifact. No coverage threshold is enforced until the platform owner
+approves one. The workflow generates a throwaway database password at run time
+and needs no repository secrets.
 
 Run the same checks locally:
 
 ```sh
-dotnet test DiscoverJesus.sln
+dotnet test DiscoverJesus.sln --collect:"XPlat Code Coverage"
 dotnet tool restore
 dotnet dotnet-ef migrations has-pending-model-changes --project DiscoverJesus.Api.csproj
 dotnet list DiscoverJesus.Api.csproj package --vulnerable --include-transitive
@@ -161,3 +181,39 @@ unset MSSQL_SA_PASSWORD ConnectionStrings__DefaultConnection
 not connect to the database. The existing service unit tests continue using EF
 Core InMemory; endpoint integration tests run through `WebApplicationFactory`
 against SQL Server.
+
+## OpenAPI contract verification
+
+The backend's [OpenAPI document](api/openapi.json) describes this API. It is
+separate from the shared repository's OpenAPI document and dynamic-content
+schemas; those documents must not be substituted for it.
+
+`OpenApiContractTests` requests `/swagger/v1/swagger.json` from an in-process
+test host and compares the entire JSON document with the checked-in contract.
+Whitespace and object-property order do not affect the comparison; array order
+and document values do. The existing CI test command runs this check and fails
+on drift. This checks generated API metadata, not conformance of every endpoint
+response or JSON content payload.
+
+Run the check without a database or running backend:
+
+```sh
+dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~OpenApiContractTests
+```
+
+The test host supplies a non-secret configuration value for startup and does
+not open a database connection. It writes the served document to
+`Tests/bin/Release/net8.0/TestResults/openapi.generated.json`, including when the
+comparison fails. CI uploads this as the `generated-openapi` artifact.
+
+For an intentional API change, inspect that generated document and review the
+contract difference before updating:
+
+```sh
+cp Tests/bin/Release/net8.0/TestResults/openapi.generated.json api/openapi.json
+git diff -- api/openapi.json
+dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~OpenApiContractTests
+```
+
+Commit intentional API and contract changes together. Do not refresh the
+contract merely to bypass an unexplained mismatch.

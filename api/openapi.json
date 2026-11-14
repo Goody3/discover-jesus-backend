@@ -554,7 +554,14 @@
         "operationId": "GetHealth",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -927,6 +934,41 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/pages/by-public-id/{pageId}": {
+      "get": {
+        "tags": [
+          "Pages"
+        ],
+        "summary": "Get a management page by public UUID, including unpublished pages",
+        "operationId": "GetPageByPublicId",
+        "parameters": [
+          {
+            "name": "pageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1563,6 +1605,12 @@
         "additionalProperties": false
       },
       "ActionResponse": {
+        "required": [
+          "config",
+          "id",
+          "name",
+          "type"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1600,6 +1648,12 @@
         "additionalProperties": false
       },
       "BindingResponse": {
+        "required": [
+          "config",
+          "id",
+          "name",
+          "source"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1642,6 +1696,15 @@
         "additionalProperties": false
       },
       "ComponentResponse": {
+        "required": [
+          "actions",
+          "bindings",
+          "id",
+          "key",
+          "props",
+          "sortOrder",
+          "type"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1687,6 +1750,18 @@
         },
         "additionalProperties": false
       },
+      "HealthResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "HttpValidationProblemDetails": {
         "type": "object",
         "properties": {
@@ -1724,6 +1799,12 @@
         "additionalProperties": { }
       },
       "PageContentDraftResponse": {
+        "required": [
+          "locale",
+          "pageId",
+          "sections",
+          "updatedAt"
+        ],
         "type": "object",
         "properties": {
           "pageId": {
@@ -1742,6 +1823,13 @@
         "additionalProperties": false
       },
       "PageContentResponse": {
+        "required": [
+          "id",
+          "locale",
+          "sections",
+          "title",
+          "version"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1785,6 +1873,14 @@
         "additionalProperties": false
       },
       "PageResponse": {
+        "required": [
+          "components",
+          "id",
+          "isPublished",
+          "publicId",
+          "slug",
+          "title"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1814,6 +1910,13 @@
         "additionalProperties": false
       },
       "PageSummary": {
+        "required": [
+          "id",
+          "isPublished",
+          "publicId",
+          "slug",
+          "title"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1837,6 +1940,13 @@
         "additionalProperties": false
       },
       "ReusableComponentDraftResponse": {
+        "required": [
+          "componentId",
+          "content",
+          "locale",
+          "name",
+          "updatedAt"
+        ],
         "type": "object",
         "properties": {
           "componentId": {
@@ -1858,6 +1968,14 @@
         "additionalProperties": false
       },
       "ReusableComponentResponse": {
+        "required": [
+          "componentId",
+          "content",
+          "locale",
+          "name",
+          "publishedAt",
+          "revision"
+        ],
         "type": "object",
         "properties": {
           "componentId": {
@@ -1883,6 +2001,12 @@
         "additionalProperties": false
       },
       "ReusableComponentSummary": {
+        "required": [
+          "componentId",
+          "createdAt",
+          "isWithdrawn",
+          "name"
+        ],
         "type": "object",
         "properties": {
           "componentId": {

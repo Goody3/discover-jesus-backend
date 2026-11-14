@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
@@ -20,5 +24,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../DiscoverJesus.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../api/openapi.json" Link="Contracts/openapi.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
