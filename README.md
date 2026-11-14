@@ -164,3 +164,39 @@ unset MSSQL_SA_PASSWORD ConnectionStrings__DefaultConnection
 not connect to the database. The existing service unit tests continue using EF
 Core InMemory; endpoint integration tests run through `WebApplicationFactory`
 against SQL Server.
+
+## OpenAPI contract verification
+
+The backend's [OpenAPI document](api/openapi.json) describes this API. It is
+separate from the shared repository's OpenAPI document and dynamic-content
+schemas; those documents must not be substituted for it.
+
+`OpenApiContractTests` requests `/swagger/v1/swagger.json` from an in-process
+test host and compares the entire JSON document with the checked-in contract.
+Whitespace and object-property order do not affect the comparison; array order
+and document values do. The existing CI test command runs this check and fails
+on drift. This checks generated API metadata, not conformance of every endpoint
+response or JSON content payload.
+
+Run the check without a database or running backend:
+
+```sh
+dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~OpenApiContractTests
+```
+
+The test host supplies a non-secret configuration value for startup and does
+not open a database connection. It writes the served document to
+`Tests/bin/Release/net8.0/TestResults/openapi.generated.json`, including when the
+comparison fails. CI uploads this as the `generated-openapi` artifact.
+
+For an intentional API change, inspect that generated document and review the
+contract difference before updating:
+
+```sh
+cp Tests/bin/Release/net8.0/TestResults/openapi.generated.json api/openapi.json
+git diff -- api/openapi.json
+dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~OpenApiContractTests
+```
+
+Commit intentional API and contract changes together. Do not refresh the
+contract merely to bypass an unexplained mismatch.

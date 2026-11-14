@@ -69,6 +69,14 @@ jobs:
           path: "TestResults/**/*.trx"
           if-no-files-found: ignore
 
+      - name: Upload generated OpenAPI
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-openapi
+          path: Tests/bin/Release/net8.0/TestResults/openapi.generated.json
+          if-no-files-found: ignore
+
       - name: Summarize coverage
         run: |
           python3 - <<'PY'
