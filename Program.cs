@@ -1,4 +1,5 @@
 using DiscoverJesus.Api;
+using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Data;
 using DiscoverJesus.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SupportNonNullableReferenceTypes();
+    options.SchemaFilter<ResponseSchemaFilter>();
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Discover Jesus Content API",
@@ -34,10 +36,11 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseSwagger();
 app.UseSwaggerUI();
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
+app.MapGet("/health", () => Results.Ok(new HealthResponse("healthy")))
     .WithName("GetHealth")
     .WithTags("Health")
-    .WithSummary("Check API availability");
+    .WithSummary("Check API availability")
+    .Produces<HealthResponse>();
 app.MapContentEndpoints();
 app.MapReusableContentEndpoints();
 

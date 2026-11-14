@@ -1,13 +1,74 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using DiscoverJesus.Api.Contracts;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace DiscoverJesus.Api.Tests;
 
 public sealed class OpenApiContractTests
 {
+    public static IEnumerable<object[]> ResponseExamples()
+    {
+        var json = JsonSerializer.SerializeToElement<object?>(null);
+        var binding = new BindingResponse(0, "", "", json);
+        var action = new ActionResponse(0, "", "", json);
+        var component = new ComponentResponse(0, "", "", json, 0, [binding], [action]);
+        yield return [new HealthResponse("healthy")];
+        yield return [new PageSummary(0, Guid.Empty, "", "", false)];
+        yield return [new PageResponse(0, Guid.Empty, "", "", false, [component])];
+        yield return [component];
+        yield return [new ComponentResponse(0, "", "", json, 0, [], [])];
+        yield return [binding];
+        yield return [action];
+        yield return [new ReusableComponentSummary(Guid.Empty, "", false, default)];
+        yield return [new ReusableComponentDraftResponse(Guid.Empty, "", "", json, default)];
+        yield return [new ReusableComponentResponse(Guid.Empty, "", "", 0, json, default)];
+        yield return [new PageContentDraftResponse(Guid.Empty, "", json, default)];
+        yield return [new PageContentResponse(Guid.Empty, "", "", 0, json)];
+    }
+
+    [Theory]
+    [MemberData(nameof(ResponseExamples))]
+    public async Task RequiredResponsePropertiesMatchActualSerialization(object value)
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        var document = JsonNode.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"))!;
+        var schema = document["components"]!["schemas"]![value.GetType().Name]!;
+        var options = factory.Services
+            .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value;
+        var body = JsonSerializer.SerializeToNode(value, value.GetType(), options.SerializerOptions)!
+            .AsObject();
+        var properties = schema["properties"]!.AsObject();
+        var required = schema["required"]!.AsArray()
+            .Select(property => property!.GetValue<string>()).Order().ToArray();
+
+        Assert.Equal(properties.Select(property => property.Key).Order(), required);
+        Assert.Equal(body.Select(property => property.Key).Order(), required);
+        foreach (var (name, property) in properties)
+        {
+            if (property!["type"]?.GetValue<string>() is "string" or "array")
+            {
+                Assert.NotNull(body[name]);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task HealthResponseMatchesDocumentedShape()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"status":"healthy"}"""),
+            JsonNode.Parse(await client.GetStringAsync("/health"))));
+    }
+
     [Fact]
     public async Task ServedOpenApiMatchesCheckedInContract()
     {
