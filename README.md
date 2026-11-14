@@ -20,6 +20,14 @@ Swagger UI is available at `/swagger`; the live OpenAPI document is at
 `/swagger/v1/swagger.json`, generated from the registered API endpoints. The
 checked-in snapshot is [api/openapi.json](api/openapi.json).
 
+Successful response DTOs explicitly list every serialized property as required
+in OpenAPI, including `false`, zero, empty collections, and opaque JSON values.
+[ResponseSchemaFilter](Contracts/ResponseSchemaFilter.cs) is limited to the
+named output DTOs; it does not change request validation, error responses, or
+JSON serialization settings. Contract tests check these required fields against
+the application's HTTP JSON serializer. `/health` documents its existing
+`{ "status": "healthy" }` response through a named DTO.
+
 ## Data model
 
 - **Pages** have unique URL slugs, titles, and a publication flag.
