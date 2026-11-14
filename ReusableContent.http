@@ -7,6 +7,9 @@
 ### Find pages and copy a page's publicId into @pageId
 GET {{baseUrl}}/api/pages/
 
+### UUID management lookup (replace with a publicId from the page list)
+GET {{baseUrl}}/api/pages/by-public-id/11111111-1111-1111-1111-111111111111
+
 ### List reusable components by friendly name
 GET {{baseUrl}}/api/reusable-components
 
