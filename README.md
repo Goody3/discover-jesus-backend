@@ -63,6 +63,7 @@ All resource endpoints are under `/api`.
 | --- | --- | --- |
 | GET | `/pages` | List page summaries |
 | GET | `/pages/{slug}` | Get a page with components, bindings, and actions |
+| GET | `/pages/by-public-id/{pageId}` | Get the same management page by public UUID, including unpublished pages |
 | POST, PUT, DELETE | `/pages`, `/pages/{id}` | Create, update, or delete a page |
 | GET, POST | `/pages/{pageId}/components` | List or add page components |
 | GET, PUT, DELETE | `/components/{id}` | Get, update, or delete a component |
@@ -87,6 +88,14 @@ Create and update endpoints accept JSON. `props` and `config` are arbitrary JSON
 values and are returned as JSON values, not escaped JSON strings. Missing resources
 return `404`, duplicate slugs or parent-scoped names return `409`, and invalid
 fields return `400`.
+
+The UUID management lookup returns `PageResponse`, including inline components,
+bindings, and actions in the same order as slug lookup. It is not localized
+published-content delivery, and it does not require the page to be published.
+Page creation now points its `Location` header to this stable UUID lookup;
+mutation routes still use integer IDs, and slugs remain editable page fields.
+The slug lookup is retained without deprecation signals pending an approved
+consumer migration, notice/monitoring policy, and removal decision.
 
 Reusable-component names are trimmed, limited to 200 characters, and unique
 across the entire library without regard to case. Withdrawn components retain

@@ -17,6 +17,11 @@ public static class ContentEndpoints
             .WithSummary("Get a page and its components, bindings, and actions")
             .Produces<PageResponse>()
             .Produces(StatusCodes.Status404NotFound);
+        pages.MapGet("/by-public-id/{pageId:guid}", GetPageByPublicId)
+            .WithName("GetPageByPublicId")
+            .WithSummary("Get a management page by public UUID, including unpublished pages")
+            .Produces<PageResponse>()
+            .Produces(StatusCodes.Status404NotFound);
         pages.MapPost("/", CreatePage).WithName("CreatePage").WithSummary("Create a page")
             .Produces<PageSummary>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
@@ -127,14 +132,27 @@ public static class ContentEndpoints
         DiscoverJesusDbContext db,
         CancellationToken cancellationToken)
     {
-        var page = await db.Pages.AsNoTracking()
-            .Include(candidate => candidate.Components)
-                .ThenInclude(component => component.Bindings)
-            .Include(candidate => candidate.Components)
-                .ThenInclude(component => component.Actions)
+        var page = await PageDetails(db)
             .SingleOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
         return page is null ? Results.NotFound() : Results.Ok(ToResponse(page));
     }
+
+    private static async Task<IResult> GetPageByPublicId(
+        Guid pageId,
+        DiscoverJesusDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var page = await PageDetails(db)
+            .SingleOrDefaultAsync(candidate => candidate.PublicId == pageId, cancellationToken);
+        return page is null ? Results.NotFound() : Results.Ok(ToResponse(page));
+    }
+
+    private static IQueryable<Page> PageDetails(DiscoverJesusDbContext db) =>
+        db.Pages.AsNoTracking()
+            .Include(page => page.Components)
+                .ThenInclude(component => component.Bindings)
+            .Include(page => page.Components)
+                .ThenInclude(component => component.Actions);
 
     private static async Task<IResult> CreatePage(
         PageRequest request,
@@ -160,7 +178,7 @@ public static class ContentEndpoints
         };
         db.Pages.Add(page);
         await db.SaveChangesAsync(cancellationToken);
-        return Results.Created($"/api/pages/{page.Slug}", ToSummary(page));
+        return Results.Created($"/api/pages/by-public-id/{page.PublicId}", ToSummary(page));
     }
 
     private static async Task<IResult> UpdatePage(

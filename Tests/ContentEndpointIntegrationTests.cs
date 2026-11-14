@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DiscoverJesus.Api.Contracts;
 using Xunit;
 
@@ -14,6 +15,74 @@ public sealed class SqlServerIntegrationCollection
 [Collection("SQL Server integration")]
 public sealed class ContentEndpointIntegrationTests
 {
+    [Fact]
+    public async Task PublicUuidLookupPreservesManagementContentAndIdentityAfterSlugRename()
+    {
+        await using var app = await SqlServerIntegrationTestApplication.StartAsync();
+        using var created = await app.Client.PostAsJsonAsync(
+            "/api/pages", new PageRequest("draft-page", "Draft page", false));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var summary = await created.Content.ReadFromJsonAsync<PageSummary>();
+        Assert.NotNull(summary);
+        var path = $"/api/pages/by-public-id/{summary.PublicId}";
+        Assert.Equal(path, created.Headers.Location?.OriginalString);
+
+        using var later = await app.Client.PostAsJsonAsync(
+            $"/api/pages/{summary.Id}/components",
+            new ComponentRequest("later", "text", ParseJson("""{"value":"Later"}"""), 2));
+        Assert.Equal(HttpStatusCode.Created, later.StatusCode);
+        using var earlier = await app.Client.PostAsJsonAsync(
+            $"/api/pages/{summary.Id}/components",
+            new ComponentRequest("earlier", "text", ParseJson("""{"value":"Earlier"}"""), 1));
+        Assert.Equal(HttpStatusCode.Created, earlier.StatusCode);
+        var component = await earlier.Content.ReadFromJsonAsync<ComponentResponse>();
+        Assert.NotNull(component);
+        using var binding = await app.Client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/bindings",
+            new BindingRequest("title", "page.title", ParseJson("""{"path":"title"}""")));
+        Assert.Equal(HttpStatusCode.Created, binding.StatusCode);
+        using var action = await app.Client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/actions",
+            new ActionRequest("tap", "navigate", ParseJson("""{"target":"home"}""")));
+        Assert.Equal(HttpStatusCode.Created, action.StatusCode);
+
+        var byUuid = await app.Client.GetStringAsync(path);
+        var bySlug = await app.Client.GetStringAsync("/api/pages/draft-page");
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(bySlug), JsonNode.Parse(byUuid)));
+        var page = JsonSerializer.Deserialize<PageResponse>(byUuid, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(page);
+        Assert.False(page.IsPublished);
+        Assert.Equal(summary.Id, page.Id);
+        Assert.Equal(summary.PublicId, page.PublicId);
+        Assert.Equal(["earlier", "later"], page.Components.Select(item => item.Key));
+        Assert.Single(page.Components[0].Bindings);
+        Assert.Single(page.Components[0].Actions);
+
+        using var renamed = await app.Client.PutAsJsonAsync(
+            $"/api/pages/{summary.Id}", new PageRequest("renamed-page", "Renamed", true));
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+        var afterRename = await app.Client.GetFromJsonAsync<PageResponse>(path);
+        Assert.NotNull(afterRename);
+        Assert.Equal(summary.PublicId, afterRename.PublicId);
+        Assert.Equal(summary.Id, afterRename.Id);
+        Assert.Equal("renamed-page", afterRename.Slug);
+        Assert.Equal("Renamed", afterRename.Title);
+        Assert.True(afterRename.IsPublished);
+        Assert.Equal(2, afterRename.Components.Count);
+        using var oldSlug = await app.Client.GetAsync("/api/pages/draft-page");
+        Assert.Equal(HttpStatusCode.NotFound, oldSlug.StatusCode);
+        using var currentSlug = await app.Client.GetAsync("/api/pages/renamed-page");
+        Assert.Equal(HttpStatusCode.OK, currentSlug.StatusCode);
+        using var invalid = await app.Client.GetAsync("/api/pages/by-public-id/not-a-uuid");
+        Assert.Equal(HttpStatusCode.NotFound, invalid.StatusCode);
+        using var missing = await app.Client.GetAsync($"/api/pages/by-public-id/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var deleted = await app.Client.DeleteAsync($"/api/pages/{summary.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        using var afterDelete = await app.Client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.NotFound, afterDelete.StatusCode);
+    }
+
     [Fact]
     public async Task PagesSupportCrudValidationConflictsAndNotFoundResponses()
     {
