@@ -25,4 +25,8 @@
   <ItemGroup>
     <ProjectReference Include="../DiscoverJesus.Api.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../api/openapi.json" Link="Contracts/openapi.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
