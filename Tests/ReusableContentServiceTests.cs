@@ -262,6 +262,82 @@ public sealed class ReusableContentServiceTests
     }
 
     [Fact]
+    public async Task ComponentDeletionRemovesRevisionLineageBeforeDeletingHistory()
+    {
+        await using var db = CreateDbContext();
+        var definition = new ReusableComponentDefinition
+        {
+            Name = "Lineage sample",
+            NormalizedName = "LINEAGE SAMPLE"
+        };
+        db.ReusableComponents.Add(definition);
+        await db.SaveChangesAsync();
+
+        var sourceRevision = new ReusableComponentRevision
+        {
+            DefinitionId = definition.Id,
+            Locale = "en",
+            RevisionNumber = 1,
+            ContentJson = """{"type":"text","value":"Original"}""",
+            PublishedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+        var migratedRevision = new ReusableComponentRevision
+        {
+            DefinitionId = definition.Id,
+            Locale = "en",
+            RevisionNumber = 2,
+            ContentJson = """{"type":"text","role":"body","value":"Original"}""",
+            PublishedAt = DateTimeOffset.UtcNow
+        };
+        db.ReusableComponentRevisions.AddRange(sourceRevision, migratedRevision);
+        await db.SaveChangesAsync();
+
+        db.ReusableComponentRevisionLineages.Add(new ReusableComponentRevisionLineage
+        {
+            SourceRevisionId = sourceRevision.Id,
+            MigratedRevisionId = migratedRevision.Id,
+            MigrationVersion = "roles-v1",
+            MigrationBatchId = Guid.NewGuid(),
+            MigratedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ReusableContentService(db);
+        var result = await service.DeleteComponentAsync(
+            definition.PublicId,
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Empty(await db.ReusableComponentRevisionLineages.ToListAsync());
+        Assert.Empty(await db.ReusableComponentRevisions.ToListAsync());
+        Assert.Empty(await db.ReusableComponents.ToListAsync());
+    }
+
+    [Fact]
+    public void RevisionLineageModelEnforcesUniqueMigrationIdentityAndNoActionReferences()
+    {
+        using var db = CreateDbContext();
+        var entityType = db.Model.FindEntityType(typeof(ReusableComponentRevisionLineage));
+
+        Assert.NotNull(entityType);
+        Assert.Contains(entityType!.GetIndexes(), index =>
+            index.IsUnique
+            && index.Properties.Select(property => property.Name)
+                .SequenceEqual(["SourceRevisionId", "MigrationVersion"]));
+        Assert.Contains(entityType.GetIndexes(), index =>
+            index.IsUnique
+            && index.Properties.Select(property => property.Name)
+                .SequenceEqual(["MigratedRevisionId"]));
+        Assert.Contains(entityType.GetIndexes(), index =>
+            !index.IsUnique
+            && index.Properties.Select(property => property.Name)
+                .SequenceEqual(["MigrationBatchId"]));
+        Assert.Equal(2, entityType.GetForeignKeys().Count());
+        Assert.All(entityType.GetForeignKeys(), foreignKey =>
+            Assert.Equal(DeleteBehavior.NoAction, foreignKey.DeleteBehavior));
+    }
+
+    [Fact]
     public async Task PageDraftRejectsUnavailableNavigationDestinations()
     {
         await using var db = CreateDbContext();

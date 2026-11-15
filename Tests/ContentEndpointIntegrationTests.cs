@@ -47,8 +47,6 @@ public sealed class ContentEndpointIntegrationTests
         Assert.Equal(HttpStatusCode.Created, action.StatusCode);
 
         var byUuid = await app.Client.GetStringAsync(path);
-        var bySlug = await app.Client.GetStringAsync("/api/pages/draft-page");
-        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(bySlug), JsonNode.Parse(byUuid)));
         var page = JsonSerializer.Deserialize<PageResponse>(byUuid, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(page);
         Assert.False(page.IsPublished);
@@ -70,9 +68,9 @@ public sealed class ContentEndpointIntegrationTests
         Assert.True(afterRename.IsPublished);
         Assert.Equal(2, afterRename.Components.Count);
         using var oldSlug = await app.Client.GetAsync("/api/pages/draft-page");
-        Assert.Equal(HttpStatusCode.NotFound, oldSlug.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, oldSlug.StatusCode);
         using var currentSlug = await app.Client.GetAsync("/api/pages/renamed-page");
-        Assert.Equal(HttpStatusCode.OK, currentSlug.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, currentSlug.StatusCode);
         using var invalid = await app.Client.GetAsync("/api/pages/by-public-id/not-a-uuid");
         Assert.Equal(HttpStatusCode.NotFound, invalid.StatusCode);
         using var missing = await app.Client.GetAsync($"/api/pages/by-public-id/{Guid.NewGuid()}");
@@ -109,7 +107,8 @@ public sealed class ContentEndpointIntegrationTests
         var pages = await app.Client.GetFromJsonAsync<PageSummary[]>("/api/pages");
         Assert.Contains(pages!, page => page.Id == createdPage.Id);
 
-        var pageResponse = await app.Client.GetFromJsonAsync<PageResponse>("/api/pages/welcome");
+        var pageResponse = await app.Client.GetFromJsonAsync<PageResponse>(
+            $"/api/pages/by-public-id/{createdPage.PublicId}");
         Assert.NotNull(pageResponse);
         Assert.Equal(createdPage.Id, pageResponse.Id);
 
@@ -124,13 +123,13 @@ public sealed class ContentEndpointIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, missingUpdateResponse.StatusCode);
 
         using var missingPageResponse = await app.Client.GetAsync("/api/pages/not-found");
-        Assert.Equal(HttpStatusCode.NotFound, missingPageResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, missingPageResponse.StatusCode);
 
         using var deleteResponse = await app.Client.DeleteAsync($"/api/pages/{createdPage.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         using var deletedPageResponse = await app.Client.GetAsync("/api/pages/welcome-home");
-        Assert.Equal(HttpStatusCode.NotFound, deletedPageResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, deletedPageResponse.StatusCode);
     }
 
     [Fact]
