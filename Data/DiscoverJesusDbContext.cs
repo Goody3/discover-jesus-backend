@@ -13,6 +13,8 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
     public DbSet<ReusableComponentDefinition> ReusableComponents => Set<ReusableComponentDefinition>();
     public DbSet<ReusableComponentDraft> ReusableComponentDrafts => Set<ReusableComponentDraft>();
     public DbSet<ReusableComponentRevision> ReusableComponentRevisions => Set<ReusableComponentRevision>();
+    public DbSet<ReusableComponentRevisionLineage> ReusableComponentRevisionLineages =>
+        Set<ReusableComponentRevisionLineage>();
     public DbSet<PageContentDraft> PageContentDrafts => Set<PageContentDraft>();
     public DbSet<PageContentRevision> PageContentRevisions => Set<PageContentRevision>();
     public DbSet<PageComponentReference> PageComponentReferences => Set<PageComponentReference>();
@@ -104,6 +106,30 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
                 .WithMany(definition => definition.Revisions)
                 .HasForeignKey(revision => revision.DefinitionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReusableComponentRevisionLineage>(entity =>
+        {
+            entity.HasKey(lineage => lineage.Id);
+            entity.Property(lineage => lineage.MigrationVersion).HasMaxLength(100).IsRequired();
+            entity.Property(lineage => lineage.MigrationBatchId).IsRequired();
+            entity.Property(lineage => lineage.MigratedAt).IsRequired();
+            entity.HasIndex(lineage => new { lineage.SourceRevisionId, lineage.MigrationVersion })
+                .IsUnique();
+            entity.HasIndex(lineage => lineage.MigratedRevisionId)
+                .IsUnique();
+            entity.HasIndex(lineage => lineage.MigrationBatchId);
+            entity.HasOne(lineage => lineage.SourceRevision)
+                .WithMany(revision => revision.SourceLineages)
+                .HasForeignKey(lineage => lineage.SourceRevisionId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(lineage => lineage.MigratedRevision)
+                .WithMany(revision => revision.DerivedLineages)
+                .HasForeignKey(lineage => lineage.MigratedRevisionId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_ReusableComponentRevisionLineages_DistinctRevisions",
+                "[SourceRevisionId] <> [MigratedRevisionId]"));
         });
 
         modelBuilder.Entity<PageContentDraft>(entity =>

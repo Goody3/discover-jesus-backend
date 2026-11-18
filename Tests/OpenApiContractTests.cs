@@ -70,6 +70,16 @@ public sealed class OpenApiContractTests
     }
 
     [Fact]
+    public async Task LegacySlugManagementRouteIsRemoved()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/api/pages/example");
+
+        Assert.Equal(System.Net.HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ServedOpenApiMatchesCheckedInContract()
     {
         await using var factory = new ContractTestApplication();

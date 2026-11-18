@@ -367,6 +367,47 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.ToTable("ReusableComponentRevisions");
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevisionLineage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("MigratedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("MigratedRevisionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MigrationBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MigrationVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SourceRevisionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MigratedRevisionId")
+                        .IsUnique();
+
+                    b.HasIndex("MigrationBatchId");
+
+                    b.HasIndex("SourceRevisionId", "MigrationVersion")
+                        .IsUnique();
+
+                    b.ToTable("ReusableComponentRevisionLineages", t =>
+                        {
+                            t.HasCheckConstraint("CK_ReusableComponentRevisionLineages_DistinctRevisions", "[SourceRevisionId] <> [MigratedRevisionId]");
+                        });
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.ActionDefinition", b =>
                 {
                     b.HasOne("DiscoverJesus.Api.Models.Component", "Component")
@@ -469,6 +510,25 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.Navigation("Definition");
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevisionLineage", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.ReusableComponentRevision", "MigratedRevision")
+                        .WithMany("DerivedLineages")
+                        .HasForeignKey("MigratedRevisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("DiscoverJesus.Api.Models.ReusableComponentRevision", "SourceRevision")
+                        .WithMany("SourceLineages")
+                        .HasForeignKey("SourceRevisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("MigratedRevision");
+
+                    b.Navigation("SourceRevision");
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.Component", b =>
                 {
                     b.Navigation("Actions");
@@ -500,6 +560,13 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.Navigation("Drafts");
 
                     b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevision", b =>
+                {
+                    b.Navigation("DerivedLineages");
+
+                    b.Navigation("SourceLineages");
                 });
 #pragma warning restore 612, 618
         }

@@ -76,6 +76,22 @@ public sealed class ReusableComponentRevision
     public required string ContentJson { get; set; }
     public DateTimeOffset PublishedAt { get; set; }
     public ReusableComponentDefinition Definition { get; set; } = null!;
+    public ICollection<ReusableComponentRevisionLineage> SourceLineages { get; set; } =
+        new List<ReusableComponentRevisionLineage>();
+    public ICollection<ReusableComponentRevisionLineage> DerivedLineages { get; set; } =
+        new List<ReusableComponentRevisionLineage>();
+}
+
+public sealed class ReusableComponentRevisionLineage
+{
+    public int Id { get; set; }
+    public int SourceRevisionId { get; set; }
+    public int MigratedRevisionId { get; set; }
+    public required string MigrationVersion { get; set; }
+    public Guid MigrationBatchId { get; set; }
+    public DateTimeOffset MigratedAt { get; set; }
+    public ReusableComponentRevision SourceRevision { get; set; } = null!;
+    public ReusableComponentRevision MigratedRevision { get; set; } = null!;
 }
 
 public sealed class PageContentDraft
