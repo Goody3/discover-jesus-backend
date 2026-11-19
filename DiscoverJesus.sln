@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiscoverJesus.Api", "Discov
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiscoverJesus.Api.Tests", "Tests\DiscoverJesus.Api.Tests.csproj", "{11CADA18-EE73-424F-8542-3D08463C76AA}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthorAccounts", "Tools\AuthorAccounts\AuthorAccounts.csproj", "{8D439C53-7579-4AB0-8822-C1113C767A3D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +28,12 @@ Global
 		{11CADA18-EE73-424F-8542-3D08463C76AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{11CADA18-EE73-424F-8542-3D08463C76AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{11CADA18-EE73-424F-8542-3D08463C76AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8D439C53-7579-4AB0-8822-C1113C767A3D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8D439C53-7579-4AB0-8822-C1113C767A3D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8D439C53-7579-4AB0-8822-C1113C767A3D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8D439C53-7579-4AB0-8822-C1113C767A3D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8D439C53-7579-4AB0-8822-C1113C767A3D} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

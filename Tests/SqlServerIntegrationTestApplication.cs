@@ -25,6 +25,8 @@ internal sealed class SqlServerIntegrationTestApplication : IAsyncDisposable
 
     public HttpClient Client { get; }
 
+    public AsyncServiceScope CreateScope() => factory.Services.CreateAsyncScope();
+
     public static async Task<SqlServerIntegrationTestApplication> StartAsync()
     {
         var configuredConnectionString =
