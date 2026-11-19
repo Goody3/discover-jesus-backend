@@ -314,6 +314,9 @@ public sealed class ContentEndpointIntegrationTests
         Assert.NotNull(pageDraft);
         Assert.Equal("en", pageDraft.Locale);
 
+        Assert.Empty((await app.Client.GetFromJsonAsync<PublishedPageSummary[]>(
+            "/api/content/pages?locale=en"))!);
+
         using var publishResponse = await app.Client.PostAsync(
             $"/api/content/pages/{page.PublicId}/publish?locale=en",
             content: null);
@@ -328,6 +331,17 @@ public sealed class ContentEndpointIntegrationTests
         Assert.NotNull(publishedRead);
         Assert.Equal(1, publishedRead.Version);
 
+        var discovery = await app.Client.GetFromJsonAsync<JsonElement>("/api/content/pages?locale=EN");
+        var summary = Assert.Single(discovery.EnumerateArray());
+        Assert.Equal(page.PublicId, summary.GetProperty("publicId").GetGuid());
+        Assert.Equal(page.Title, summary.GetProperty("title").GetString());
+        Assert.Equal(page.Slug, summary.GetProperty("slug").GetString());
+        Assert.Equal(3, summary.EnumerateObject().Count());
+        Assert.Empty((await app.Client.GetFromJsonAsync<PublishedPageSummary[]>(
+            "/api/content/pages?locale=fr"))!);
+        using var invalidDiscovery = await app.Client.GetAsync("/api/content/pages?locale=!");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidDiscovery.StatusCode);
+
         using var missingLocaleResponse = await app.Client.GetAsync(
             $"/api/content/pages/{page.PublicId}?locale=fr");
         Assert.Equal(HttpStatusCode.NotFound, missingLocaleResponse.StatusCode);
@@ -340,6 +354,17 @@ public sealed class ContentEndpointIntegrationTests
         using var missingPageResponse = await app.Client.GetAsync(
             $"/api/content/pages/{Guid.NewGuid()}?locale=en");
         Assert.Equal(HttpStatusCode.NotFound, missingPageResponse.StatusCode);
+
+        using var unpublishResponse = await app.Client.PutAsJsonAsync($"/api/pages/{page.Id}",
+            new PageRequest(page.Slug, page.Title, false));
+        unpublishResponse.EnsureSuccessStatusCode();
+        Assert.Empty((await app.Client.GetFromJsonAsync<PublishedPageSummary[]>(
+            "/api/content/pages?locale=en"))!);
+        using var unpublishedRead = await app.Client.GetAsync($"/api/content/pages/{page.PublicId}?locale=en");
+        Assert.Equal(HttpStatusCode.NotFound, unpublishedRead.StatusCode);
+
+        var management = await app.Client.GetFromJsonAsync<PageSummary[]>("/api/pages");
+        Assert.Equal(page with { IsPublished = false }, Assert.Single(management!));
     }
 
     private static async Task<PageSummary> CreatePageAsync(HttpClient client)

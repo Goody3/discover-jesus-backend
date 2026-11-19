@@ -70,6 +70,13 @@ public static class ReusableContentEndpoints
 
         var pageContent = endpoints.MapGroup("/api/content/pages")
             .WithTags("Page content");
+        pageContent.MapGet("", GetPublishedPages)
+            .AllowAnonymous()
+            .WithName("GetPublishedPages")
+            .WithSummary("List published pages for a locale")
+            .WithDescription("Returns reader-facing metadata for pages with a published revision in the requested locale.")
+            .Produces<PublishedPageSummary[]>()
+            .ProducesValidationProblem();
         pageContent.MapGet("/{pageId:guid}", GetPage)
             .WithName("GetPageContent")
             .WithSummary("Get a published page with reusable components expanded")
@@ -187,6 +194,12 @@ public static class ReusableContentEndpoints
         var result = await service.DeleteComponentAsync(componentId, cancellationToken);
         return result.Succeeded ? Results.NoContent() : ToResult(result);
     }
+
+    private static async Task<IResult> GetPublishedPages(
+        string locale,
+        IReusableContentService service,
+        CancellationToken cancellationToken) =>
+        ToResult(await service.GetPublishedPagesAsync(locale, cancellationToken));
 
     private static async Task<IResult> GetPage(
         Guid pageId,

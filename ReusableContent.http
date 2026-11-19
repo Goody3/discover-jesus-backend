@@ -4,6 +4,12 @@
 @componentId = 00000000-0000-0000-0000-000000000002
 @unusedComponentId = 00000000-0000-0000-0000-000000000003
 
+### Discover published pages for a locale (no sign-in)
+GET {{baseUrl}}/api/content/pages?locale={{locale}}
+
+### Reject invalid locale
+GET {{baseUrl}}/api/content/pages?locale=!
+
 ### Find pages and copy a page's publicId into @pageId
 GET {{baseUrl}}/api/pages/
 

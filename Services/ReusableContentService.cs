@@ -676,6 +676,28 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                     expanded.Value!));
     }
 
+    public async Task<ReusableContentResult<PublishedPageSummary[]>> GetPublishedPagesAsync(
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var localeError = ValidateLocale(locale);
+        if (localeError is not null)
+        {
+            return Failure<PublishedPageSummary[]>(400, "The locale is invalid.", "locale", localeError);
+        }
+
+        var normalizedLocale = NormalizeLocale(locale);
+        var pages = await db.Pages.AsNoTracking()
+            .Where(page => page.IsPublished
+                && db.PageContentRevisions.Any(revision =>
+                    revision.PageId == page.Id && revision.Locale == normalizedLocale))
+            .OrderBy(page => page.Slug)
+            .Select(page => new PublishedPageSummary(page.PublicId, page.Slug, page.Title))
+            .ToArrayAsync(cancellationToken);
+
+        return ReusableContentResult<PublishedPageSummary[]>.Success(pages);
+    }
+
     public async Task<ReusableContentResult<PageContentResponse>> GetPageAsync(
         Guid pageId,
         string locale,

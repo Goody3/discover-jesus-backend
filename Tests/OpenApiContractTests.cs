@@ -22,6 +22,7 @@ public sealed class OpenApiContractTests
         var component = new ComponentResponse(0, "", "", json, 0, [binding], [action]);
         yield return [new HealthResponse("healthy")];
         yield return [new PageSummary(0, Guid.Empty, "", "", false)];
+        yield return [new PublishedPageSummary(Guid.Empty, "", "")];
         yield return [new PageResponse(0, Guid.Empty, "", "", false, [component])];
         yield return [component];
         yield return [new ComponentResponse(0, "", "", json, 0, [], [])];
