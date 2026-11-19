@@ -17,7 +17,8 @@ public sealed class ResponseSchemaFilter : ISchemaFilter
         typeof(ReusableComponentDraftResponse),
         typeof(ReusableComponentResponse),
         typeof(PageContentDraftResponse),
-        typeof(PageContentResponse)
+        typeof(PageContentResponse),
+        typeof(PublishedPageSummary)
     ];
 
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)

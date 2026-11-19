@@ -53,6 +53,9 @@ public sealed record PageContentResponse(
     int Version,
     JsonElement Sections);
 
+/// <summary>Identifies a published page available in the requested locale.</summary>
+public sealed record PublishedPageSummary(Guid PublicId, string Slug, string Title);
+
 /// <summary>Represents a failed reusable-content operation.</summary>
 public sealed record ReusableContentError(
     int StatusCode,

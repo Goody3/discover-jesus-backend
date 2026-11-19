@@ -12,6 +12,28 @@ namespace DiscoverJesus.Api.Tests;
 public sealed class ReusableContentServiceTests
 {
     [Fact]
+    public async Task PublishedDiscoveryRequiresBothPublicationAndALocalizedRevision()
+    {
+        await using var db = CreateDbContext();
+        var available = await AddPageAsync(db, isPublished: true, hasEnglishRevision: true);
+        var unpublished = await AddPageAsync(db, hasEnglishRevision: true);
+        await AddPageAsync(db, isPublished: true);
+        var service = new ReusableContentService(db);
+        var ct = CancellationToken.None;
+
+        var english = await service.GetPublishedPagesAsync("EN", ct);
+        Assert.True(english.Succeeded);
+        Assert.Equal(new PublishedPageSummary(available.PublicId, available.Slug, available.Title),
+            Assert.Single(english.Value!));
+
+        var french = await service.GetPublishedPagesAsync("fr", ct);
+        Assert.True(french.Succeeded);
+        Assert.Empty(french.Value!);
+        Assert.Equal(400, (await service.GetPublishedPagesAsync("!", ct)).Error?.StatusCode);
+        Assert.Equal(404, (await service.GetPageAsync(unpublished.PublicId, "en", ct)).Error?.StatusCode);
+    }
+
+    [Fact]
     public async Task PublishedPageExpandsReferencesAndPreservesProvenance()
     {
         await using var db = CreateDbContext();
