@@ -16,9 +16,11 @@ dotnet ef database update
 dotnet run
 ```
 
-Swagger UI is available at `/swagger`; the live OpenAPI document is at
-`/swagger/v1/swagger.json`, generated from the registered API endpoints. The
-checked-in snapshot is [api/openapi.json](api/openapi.json).
+In the `Development` environment, Swagger UI is available at `/swagger`
+and the live OpenAPI document is at `/swagger/v1/swagger.json`. Neither
+is served in other environments. To enable them locally, run
+`ASPNETCORE_ENVIRONMENT=Development dotnet run`. The checked-in snapshot is
+[api/openapi.json](api/openapi.json).
 
 Successful response DTOs explicitly list every serialized property as required
 in OpenAPI, including `false`, zero, empty collections, and opaque JSON values.
@@ -263,7 +265,9 @@ separate from the shared repository's OpenAPI document and dynamic-content
 schemas; those documents must not be substituted for it.
 
 `OpenApiContractTests` requests `/swagger/v1/swagger.json` from an in-process
-test host and compares the entire JSON document with the checked-in contract.
+Development test host and compares the entire JSON document with the
+checked-in contract. It also checks that Swagger is unavailable in Staging
+and Production.
 Whitespace and object-property order do not affect the comparison; array order
 and document values do. The existing CI test command runs this check and fails
 on drift. This checks generated API metadata, not conformance of every endpoint
