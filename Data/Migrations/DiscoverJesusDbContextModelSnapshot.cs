@@ -55,6 +55,77 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.ToTable("Actions", (string)null);
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DisabledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuthorAccounts");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccountAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.ToTable("AuthorAccountAudits", t =>
+                        {
+                            t.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole", "([Action] IN (1, 4) AND [Role] IS NULL) OR ([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))");
+                        });
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorGrant", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("AccountId", "Role");
+
+                    b.ToTable("AuthorGrants", t =>
+                        {
+                            t.HasCheckConstraint("CK_AuthorGrants_Role", "[Role] IN (1, 2)");
+                        });
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>
                 {
                     b.Property<int>("Id")
@@ -417,6 +488,24 @@ namespace DiscoverJesus.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Component");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccountAudit", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorGrant", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>

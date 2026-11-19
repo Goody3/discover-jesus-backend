@@ -28,6 +28,36 @@ JSON serialization settings. Contract tests check these required fields against
 the application's HTTP JSON serializer. `/health` documents its existing
 `{ "status": "healthy" }` response through a named DTO.
 
+## Author account operations (STORY-019)
+
+The separate `AuthorAccounts` tool is for trusted operators only. It adds
+no HTTP routes, sign-in or sessions. Provisioning returns an application UUID
+with no grants. Disabling an account retains the account and its history; a
+disabled account cannot receive new grants. Existing grants can still be
+revoked. Each actual change and its audit row are saved together.
+
+After an approved deployment has applied the additive migration, set
+`AuthorAccounts__ConnectionString` securely using an individually attributable
+database identity, separate from the API and migration identities. Do not
+use a shared login: the audit actor comes from SQL Server's original login.
+The operator needs read and insert access for accounts, grants, and audit
+records, update access for accounts, and delete access for grants only. Do
+not grant update or delete access to audit records.
+
+```sh
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" provision
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" grant "$ACCOUNT_ID" DraftEditor
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" revoke "$ACCOUNT_ID" DraftEditor
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" disable "$ACCOUNT_ID"
+```
+
+Set `ACCOUNT_ID` to the UUID printed by `provision`. The server and database
+arguments must match the configured connection target. Use `Publisher` for
+an explicit publisher grant. These records are not yet used to authorize
+HTTP access; enforcement is a later EPIC-004 story. If a write does not
+confirm success, reconcile the account and audit rows before retrying,
+especially for provisioning, which allocates a new UUID on each invocation.
+
 ## Data model
 
 - **Pages** have unique URL slugs, titles, and a publication flag.
