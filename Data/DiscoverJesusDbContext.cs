@@ -13,12 +13,44 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
     public DbSet<ReusableComponentDefinition> ReusableComponents => Set<ReusableComponentDefinition>();
     public DbSet<ReusableComponentDraft> ReusableComponentDrafts => Set<ReusableComponentDraft>();
     public DbSet<ReusableComponentRevision> ReusableComponentRevisions => Set<ReusableComponentRevision>();
+    public DbSet<ReusableComponentRevisionLineage> ReusableComponentRevisionLineages =>
+        Set<ReusableComponentRevisionLineage>();
     public DbSet<PageContentDraft> PageContentDrafts => Set<PageContentDraft>();
     public DbSet<PageContentRevision> PageContentRevisions => Set<PageContentRevision>();
     public DbSet<PageComponentReference> PageComponentReferences => Set<PageComponentReference>();
+    public DbSet<AuthorAccount> AuthorAccounts => Set<AuthorAccount>();
+    public DbSet<AuthorGrant> AuthorGrants => Set<AuthorGrant>();
+    public DbSet<AuthorAccountAudit> AuthorAccountAudits => Set<AuthorAccountAudit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AuthorAccount>(entity =>
+        {
+            entity.HasKey(account => account.Id);
+            entity.Property(account => account.Id).ValueGeneratedNever();
+            entity.Property(account => account.Version).IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<AuthorGrant>(entity =>
+        {
+            entity.HasKey(grant => new { grant.AccountId, grant.Role });
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(grant => grant.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_AuthorGrants_Role", "[Role] IN (1, 2)"));
+        });
+
+        modelBuilder.Entity<AuthorAccountAudit>(entity =>
+        {
+            entity.HasKey(audit => audit.Id);
+            entity.Property(audit => audit.Actor).HasMaxLength(256).IsRequired();
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(audit => audit.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(table => table.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole",
+                "([Action] IN (1, 4) AND [Role] IS NULL) OR " +
+                "([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))"));
+        });
+
         modelBuilder.Entity<Page>(entity =>
         {
             entity.HasKey(page => page.Id);
@@ -104,6 +136,30 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
                 .WithMany(definition => definition.Revisions)
                 .HasForeignKey(revision => revision.DefinitionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReusableComponentRevisionLineage>(entity =>
+        {
+            entity.HasKey(lineage => lineage.Id);
+            entity.Property(lineage => lineage.MigrationVersion).HasMaxLength(100).IsRequired();
+            entity.Property(lineage => lineage.MigrationBatchId).IsRequired();
+            entity.Property(lineage => lineage.MigratedAt).IsRequired();
+            entity.HasIndex(lineage => new { lineage.SourceRevisionId, lineage.MigrationVersion })
+                .IsUnique();
+            entity.HasIndex(lineage => lineage.MigratedRevisionId)
+                .IsUnique();
+            entity.HasIndex(lineage => lineage.MigrationBatchId);
+            entity.HasOne(lineage => lineage.SourceRevision)
+                .WithMany(revision => revision.SourceLineages)
+                .HasForeignKey(lineage => lineage.SourceRevisionId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(lineage => lineage.MigratedRevision)
+                .WithMany(revision => revision.DerivedLineages)
+                .HasForeignKey(lineage => lineage.MigratedRevisionId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_ReusableComponentRevisionLineages_DistinctRevisions",
+                "[SourceRevisionId] <> [MigratedRevisionId]"));
         });
 
         modelBuilder.Entity<PageContentDraft>(entity =>

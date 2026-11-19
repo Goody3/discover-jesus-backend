@@ -16,9 +16,11 @@ dotnet ef database update
 dotnet run
 ```
 
-Swagger UI is available at `/swagger`; the live OpenAPI document is at
-`/swagger/v1/swagger.json`, generated from the registered API endpoints. The
-checked-in snapshot is [api/openapi.json](api/openapi.json).
+In the `Development` environment, Swagger UI is available at `/swagger`
+and the live OpenAPI document is at `/swagger/v1/swagger.json`. Neither
+is served in other environments. To enable them locally, run
+`ASPNETCORE_ENVIRONMENT=Development dotnet run`. The checked-in snapshot is
+[api/openapi.json](api/openapi.json).
 
 Successful response DTOs explicitly list every serialized property as required
 in OpenAPI, including `false`, zero, empty collections, and opaque JSON values.
@@ -28,12 +30,45 @@ JSON serialization settings. Contract tests check these required fields against
 the application's HTTP JSON serializer. `/health` documents its existing
 `{ "status": "healthy" }` response through a named DTO.
 
+## Author account operations (STORY-019)
+
+The separate `AuthorAccounts` tool is for trusted operators only. It adds
+no HTTP routes, sign-in or sessions. Provisioning returns an application UUID
+with no grants. Disabling an account retains the account and its history; a
+disabled account cannot receive new grants. Existing grants can still be
+revoked. Each actual change and its audit row are saved together.
+
+After an approved deployment has applied the additive migration, set
+`AuthorAccounts__ConnectionString` securely using an individually attributable
+database identity, separate from the API and migration identities. Do not
+use a shared login: the audit actor comes from SQL Server's original login.
+The operator needs read and insert access for accounts, grants, and audit
+records, update access for accounts, and delete access for grants only. Do
+not grant update or delete access to audit records.
+
+```sh
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" provision
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" grant "$ACCOUNT_ID" DraftEditor
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" revoke "$ACCOUNT_ID" DraftEditor
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" disable "$ACCOUNT_ID"
+```
+
+Set `ACCOUNT_ID` to the UUID printed by `provision`. The server and database
+arguments must match the configured connection target. Use `Publisher` for
+an explicit publisher grant. These records are not yet used to authorize
+HTTP access; enforcement is a later EPIC-004 story. If a write does not
+confirm success, reconcile the account and audit rows before retrying,
+especially for provisioning, which allocates a new UUID on each invocation.
+
 ## Data model
 
 - **Pages** have unique URL slugs, titles, and a publication flag.
 - **Reusable components** have globally unique friendly names and stable public
   UUIDs, locale-specific drafts, and immutable, numbered published revisions.
   Management screens use friendly names; page references continue storing UUIDs.
+  Migration lineage records link source and migrated revisions by transformation
+  version and batch. They are internal metadata and are removed with the
+  component's revision history on explicit component deletion.
 - **Page content** has locale-specific drafts and immutable published revisions.
   Its `sections` can contain inline nodes or references to reusable components.
   References resolve to the latest published revision for the requested locale,
@@ -62,7 +97,6 @@ All resource endpoints are under `/api`.
 | Method | Route | Description |
 | --- | --- | --- |
 | GET | `/pages` | List page summaries |
-| GET | `/pages/{slug}` | Get a page with components, bindings, and actions |
 | GET | `/pages/by-public-id/{pageId}` | Get the same management page by public UUID, including unpublished pages |
 | POST, PUT, DELETE | `/pages`, `/pages/{id}` | Create, update, or delete a page |
 | GET, POST | `/pages/{pageId}/components` | List or add page components |
@@ -90,12 +124,11 @@ return `404`, duplicate slugs or parent-scoped names return `409`, and invalid
 fields return `400`.
 
 The UUID management lookup returns `PageResponse`, including inline components,
-bindings, and actions in the same order as slug lookup. It is not localized
-published-content delivery, and it does not require the page to be published.
-Page creation now points its `Location` header to this stable UUID lookup;
-mutation routes still use integer IDs, and slugs remain editable page fields.
-The slug lookup is retained without deprecation signals pending an approved
-consumer migration, notice/monitoring policy, and removal decision.
+bindings, and actions. It is not localized published-content delivery, and it
+does not require the page to be published. Page creation points its `Location`
+header to this stable UUID lookup; mutation routes still use integer IDs, and
+slugs remain editable page fields. The slug-based detail lookup has been
+removed; page summaries continue to expose slugs as editable/display fields.
 
 Reusable-component names are trimmed, limited to 200 characters, and unique
 across the entire library without regard to case. Withdrawn components retain
@@ -121,6 +154,49 @@ configurations are not transformed by those schema migrations. See
 [ReusableContent.http](ReusableContent.http) for example requests and
 [the service tests](Tests/ReusableContentServiceTests.cs) for covered lifecycle,
 naming, and validation behavior.
+
+## EPIC-003 payload migration
+
+The dry-run mode is read-only. It loads source pages, components, and reusable
+component revisions, then evaluates the approved transformation mappings in
+memory:
+
+```sh
+dotnet run --project Tools/Epic003DryRun/Epic003DryRun.csproj -- --dry-run
+```
+
+Set `ConnectionStrings__DefaultConnection` to the hosted development database
+before running it. This mode only executes no-tracking reads; it does not apply
+EF migrations, write content or lineage rows, or print transformed payloads.
+It reports blocked revisions and succeeds only when the current snapshot
+matches the inventoried counts for 55 source revisions, 24 navigation targets,
+12 list items, and the two NavBars with four children. NavBar children use the
+latest NBButton revision per definition and locale, ordered by the original
+`Components.SortOrder`; `source.componentId` is used only to recover that order
+during migration. If a database snapshot is obtained through another
+read-only SQL client, the same transformation can be checked without a
+connection string using `--dry-run-json <snapshot-file>`; the file contains
+`pages`, `components`, and `revisions` arrays with the corresponding database
+columns.
+
+The separate content-writing mode is restricted to the inventoried hosted
+development database and requires an explicit invocation with a caller-provided
+batch UUID:
+
+```sh
+dotnet run --project Tools/Epic003DryRun/Epic003DryRun.csproj -- \
+  --apply-preproduction --batch-id <new-guid>
+```
+
+Run this only after explicit owner authorization and after the
+`AddReusableComponentRevisionLineage` EF migration has been applied separately.
+The tool never applies schema migrations. Before writing, it checks the exact
+server and database, requires the full approved inventory counts, and reruns
+the mapping preflight. It creates linked immutable revisions and lineage rows
+inside one serializable transaction, preserves source rows, and uses the
+migration time for new `PublishedAt` values. Retries reuse complete existing
+lineage; changed inventories, mapping mismatches, and partial lineage fail
+before writes. The output contains counts and identifiers, not content.
 
 ## Continuous integration
 
@@ -189,7 +265,9 @@ separate from the shared repository's OpenAPI document and dynamic-content
 schemas; those documents must not be substituted for it.
 
 `OpenApiContractTests` requests `/swagger/v1/swagger.json` from an in-process
-test host and compares the entire JSON document with the checked-in contract.
+Development test host and compares the entire JSON document with the
+checked-in contract. It also checks that Swagger is unavailable in Staging
+and Production.
 Whitespace and object-property order do not affect the comparison; array order
 and document values do. The existing CI test command runs this check and fails
 on drift. This checks generated API metadata, not conformance of every endpoint

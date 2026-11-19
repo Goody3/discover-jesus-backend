@@ -13,10 +13,6 @@ public static class ContentEndpoints
         var pages = endpoints.MapGroup("/api/pages").WithTags("Pages");
         pages.MapGet("/", GetPages).WithName("GetPages").WithSummary("List pages")
             .Produces<IReadOnlyList<PageSummary>>();
-        pages.MapGet("/{slug}", GetPage).WithName("GetPage")
-            .WithSummary("Get a page and its components, bindings, and actions")
-            .Produces<PageResponse>()
-            .Produces(StatusCodes.Status404NotFound);
         pages.MapGet("/by-public-id/{pageId:guid}", GetPageByPublicId)
             .WithName("GetPageByPublicId")
             .WithSummary("Get a management page by public UUID, including unpublished pages")
@@ -125,16 +121,6 @@ public static class ContentEndpoints
                 page.IsPublished))
             .ToListAsync(cancellationToken);
         return Results.Ok(pages);
-    }
-
-    private static async Task<IResult> GetPage(
-        string slug,
-        DiscoverJesusDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var page = await PageDetails(db)
-            .SingleOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
-        return page is null ? Results.NotFound() : Results.Ok(ToResponse(page));
     }
 
     private static async Task<IResult> GetPageByPublicId(

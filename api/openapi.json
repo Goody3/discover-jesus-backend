@@ -920,40 +920,6 @@
         }
       }
     },
-    "/api/pages/{slug}": {
-      "get": {
-        "tags": [
-          "Pages"
-        ],
-        "summary": "Get a page and its components, bindings, and actions",
-        "operationId": "GetPage",
-        "parameters": [
-          {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        }
-      }
-    },
     "/api/pages/by-public-id/{pageId}": {
       "get": {
         "tags": [

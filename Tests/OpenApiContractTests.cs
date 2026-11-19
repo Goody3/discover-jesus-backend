@@ -1,6 +1,8 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using DiscoverJesus.Api.Contracts;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,6 +69,47 @@ public sealed class OpenApiContractTests
         Assert.True(JsonNode.DeepEquals(
             JsonNode.Parse("""{"status":"healthy"}"""),
             JsonNode.Parse(await client.GetStringAsync("/health"))));
+    }
+
+    [Fact]
+    public async Task SwaggerUiIsAvailableInDevelopment()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/swagger/index.html");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public async Task SwaggerIsNotServedOutsideDevelopment(string environment)
+    {
+        await using var factory = new ContractTestApplication();
+        await using var nonDevelopmentFactory = factory.WithWebHostBuilder(
+            builder => builder.UseEnvironment(environment));
+        using var client = nonDevelopmentFactory.CreateClient(
+            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        foreach (var path in new[] { "/swagger", "/swagger/index.html", "/swagger/v1/swagger.json" })
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        using var health = await client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    [Fact]
+    public async Task LegacySlugManagementRouteIsRemoved()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/api/pages/example");
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
     [Fact]

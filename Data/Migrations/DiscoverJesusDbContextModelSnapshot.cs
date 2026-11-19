@@ -55,6 +55,77 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.ToTable("Actions", (string)null);
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DisabledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuthorAccounts");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccountAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.ToTable("AuthorAccountAudits", t =>
+                        {
+                            t.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole", "([Action] IN (1, 4) AND [Role] IS NULL) OR ([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))");
+                        });
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorGrant", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("AccountId", "Role");
+
+                    b.ToTable("AuthorGrants", t =>
+                        {
+                            t.HasCheckConstraint("CK_AuthorGrants_Role", "[Role] IN (1, 2)");
+                        });
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>
                 {
                     b.Property<int>("Id")
@@ -367,6 +438,47 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.ToTable("ReusableComponentRevisions");
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevisionLineage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("MigratedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("MigratedRevisionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MigrationBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MigrationVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SourceRevisionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MigratedRevisionId")
+                        .IsUnique();
+
+                    b.HasIndex("MigrationBatchId");
+
+                    b.HasIndex("SourceRevisionId", "MigrationVersion")
+                        .IsUnique();
+
+                    b.ToTable("ReusableComponentRevisionLineages", t =>
+                        {
+                            t.HasCheckConstraint("CK_ReusableComponentRevisionLineages_DistinctRevisions", "[SourceRevisionId] <> [MigratedRevisionId]");
+                        });
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.ActionDefinition", b =>
                 {
                     b.HasOne("DiscoverJesus.Api.Models.Component", "Component")
@@ -376,6 +488,24 @@ namespace DiscoverJesus.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Component");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorAccountAudit", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorGrant", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>
@@ -469,6 +599,25 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.Navigation("Definition");
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevisionLineage", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.ReusableComponentRevision", "MigratedRevision")
+                        .WithMany("DerivedLineages")
+                        .HasForeignKey("MigratedRevisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("DiscoverJesus.Api.Models.ReusableComponentRevision", "SourceRevision")
+                        .WithMany("SourceLineages")
+                        .HasForeignKey("SourceRevisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("MigratedRevision");
+
+                    b.Navigation("SourceRevision");
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.Component", b =>
                 {
                     b.Navigation("Actions");
@@ -500,6 +649,13 @@ namespace DiscoverJesus.Api.Data.Migrations
                     b.Navigation("Drafts");
 
                     b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.ReusableComponentRevision", b =>
+                {
+                    b.Navigation("DerivedLineages");
+
+                    b.Navigation("SourceLineages");
                 });
 #pragma warning restore 612, 618
         }

@@ -367,6 +367,19 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             return Conflict<bool>("The component cannot be deleted while any saved page draft or revision references it.");
         }
 
+        var revisionIds = await db.ReusableComponentRevisions
+            .Where(revision => revision.DefinitionId == definition.Id)
+            .Select(revision => revision.Id)
+            .ToArrayAsync(cancellationToken);
+        if (revisionIds.Length > 0)
+        {
+            var lineages = await db.ReusableComponentRevisionLineages
+                .Where(lineage => revisionIds.Contains(lineage.SourceRevisionId)
+                    || revisionIds.Contains(lineage.MigratedRevisionId))
+                .ToListAsync(cancellationToken);
+            db.ReusableComponentRevisionLineages.RemoveRange(lineages);
+        }
+
         db.ReusableComponents.Remove(definition);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
