@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Services;
 
@@ -9,7 +10,11 @@ public static class ReusableContentEndpoints
         this IEndpointRouteBuilder endpoints)
     {
         var reusableComponents = endpoints.MapGroup("/api/reusable-components")
-            .WithTags("Reusable components");
+            .WithTags("Reusable components")
+            .RequireRateLimiting("authoring");
+        var readerPages = endpoints.MapGroup("/api/content/pages")
+            .WithTags("Page content")
+            .RequireRateLimiting("published-reader");
         reusableComponents.MapGet("", GetComponents)
             .WithName("GetReusableComponents")
             .WithSummary("List reusable components by friendly name")
@@ -68,43 +73,45 @@ public static class ReusableContentEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
-        var pageContent = endpoints.MapGroup("/api/content/pages")
-            .WithTags("Page content");
-        pageContent.MapGet("", GetPublishedPages)
+        readerPages.MapGet("", GetPublishedPages)
             .AllowAnonymous()
             .WithName("GetPublishedPages")
             .WithSummary("List published pages for a locale")
             .WithDescription("Returns reader-facing metadata for pages with a published revision in the requested locale.")
             .Produces<PublishedPageSummary[]>()
             .ProducesValidationProblem();
-        pageContent.MapGet("/{pageId:guid}", GetPage)
+        readerPages.MapGet("/{pageId:guid}", GetPage)
+            .AllowAnonymous()
             .WithName("GetPageContent")
             .WithSummary("Get a published page with reusable components expanded")
             .Produces<PageContentResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status422UnprocessableEntity);
-        pageContent.MapGet("/{pageId:guid}/draft", GetPageDraft)
+        var pageAuthoring = endpoints.MapGroup("/api/content/pages")
+            .WithTags("Page content")
+            .RequireRateLimiting("authoring");
+        pageAuthoring.MapGet("/{pageId:guid}/draft", GetPageDraft)
             .WithName("GetPageContentDraft")
             .WithSummary("Get a page content draft for a locale")
             .Produces<PageContentDraftResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound);
-        pageContent.MapPost("/{pageId:guid}/draft/from-published", StartPageDraftFromPublished)
+        pageAuthoring.MapPost("/{pageId:guid}/draft/from-published", StartPageDraftFromPublished)
             .WithName("StartPageDraftFromPublished")
             .WithSummary("Start a page draft by copying its latest published sections")
             .Produces<PageContentDraftResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        pageContent.MapPut("/{pageId:guid}/draft", UpdatePageDraft)
+        pageAuthoring.MapPut("/{pageId:guid}/draft", UpdatePageDraft)
             .WithName("UpdatePageContentDraft")
             .WithSummary("Create or replace a page content draft")
             .Produces<PageContentDraftResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status422UnprocessableEntity);
-        pageContent.MapPost("/{pageId:guid}/publish", PublishPage)
+        pageAuthoring.MapPost("/{pageId:guid}/publish", PublishPage)
             .WithName("PublishPageContent")
             .WithSummary("Validate references and publish a page content revision")
             .Produces<PageContentResponse>()

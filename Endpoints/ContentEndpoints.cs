@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.RateLimiting;
 using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Data;
 using DiscoverJesus.Api.Models;
@@ -10,7 +11,8 @@ public static class ContentEndpoints
 {
     public static IEndpointRouteBuilder MapContentEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var pages = endpoints.MapGroup("/api/pages").WithTags("Pages");
+        var api = endpoints.MapGroup("/api").RequireRateLimiting("authoring");
+        var pages = api.MapGroup("/pages").WithTags("Pages");
         pages.MapGet("/", GetPages).WithName("GetPages").WithSummary("List pages")
             .Produces<IReadOnlyList<PageSummary>>();
         pages.MapGet("/by-public-id/{pageId:guid}", GetPageByPublicId)
@@ -41,67 +43,67 @@ public static class ContentEndpoints
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapGet("/api/components/{id:int}", GetComponent).WithTags("Components")
+        api.MapGet("/components/{id:int}", GetComponent).WithTags("Components")
             .WithName("GetComponent").WithSummary("Get a component")
             .Produces<ComponentResponse>()
             .Produces(StatusCodes.Status404NotFound);
-        endpoints.MapPut("/api/components/{id:int}", UpdateComponent).WithTags("Components")
+        api.MapPut("/components/{id:int}", UpdateComponent).WithTags("Components")
             .WithName("UpdateComponent").WithSummary("Update a component")
             .Produces<ComponentResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapDelete("/api/components/{id:int}", DeleteComponent).WithTags("Components")
+        api.MapDelete("/components/{id:int}", DeleteComponent).WithTags("Components")
             .WithName("DeleteComponent").WithSummary("Delete a component")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
-        endpoints.MapGet("/api/components/{componentId:int}/bindings", GetBindings)
+        api.MapGet("/components/{componentId:int}/bindings", GetBindings)
             .WithTags("Bindings").WithName("GetBindings").WithSummary("List component bindings")
             .Produces<IReadOnlyList<BindingResponse>>()
             .Produces(StatusCodes.Status404NotFound);
-        endpoints.MapPost("/api/components/{componentId:int}/bindings", CreateBinding)
+        api.MapPost("/components/{componentId:int}/bindings", CreateBinding)
             .WithTags("Bindings").WithName("CreateBinding").WithSummary("Add a component binding")
             .Produces<BindingResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapGet("/api/bindings/{id:int}", GetBinding).WithTags("Bindings")
+        api.MapGet("/bindings/{id:int}", GetBinding).WithTags("Bindings")
             .WithName("GetBinding").WithSummary("Get a binding")
             .Produces<BindingResponse>()
             .Produces(StatusCodes.Status404NotFound);
-        endpoints.MapPut("/api/bindings/{id:int}", UpdateBinding).WithTags("Bindings")
+        api.MapPut("/bindings/{id:int}", UpdateBinding).WithTags("Bindings")
             .WithName("UpdateBinding").WithSummary("Update a binding")
             .Produces<BindingResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapDelete("/api/bindings/{id:int}", DeleteBinding).WithTags("Bindings")
+        api.MapDelete("/bindings/{id:int}", DeleteBinding).WithTags("Bindings")
             .WithName("DeleteBinding").WithSummary("Delete a binding")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
-        endpoints.MapGet("/api/components/{componentId:int}/actions", GetActions)
+        api.MapGet("/components/{componentId:int}/actions", GetActions)
             .WithTags("Actions").WithName("GetActions").WithSummary("List component actions")
             .Produces<IReadOnlyList<ActionResponse>>()
             .Produces(StatusCodes.Status404NotFound);
-        endpoints.MapPost("/api/components/{componentId:int}/actions", CreateAction)
+        api.MapPost("/components/{componentId:int}/actions", CreateAction)
             .WithTags("Actions").WithName("CreateAction").WithSummary("Add a component action")
             .Produces<ActionResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapGet("/api/actions/{id:int}", GetAction).WithTags("Actions")
+        api.MapGet("/actions/{id:int}", GetAction).WithTags("Actions")
             .WithName("GetAction").WithSummary("Get an action definition")
             .Produces<ActionResponse>()
             .Produces(StatusCodes.Status404NotFound);
-        endpoints.MapPut("/api/actions/{id:int}", UpdateAction).WithTags("Actions")
+        api.MapPut("/actions/{id:int}", UpdateAction).WithTags("Actions")
             .WithName("UpdateAction").WithSummary("Update an action definition")
             .Produces<ActionResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
-        endpoints.MapDelete("/api/actions/{id:int}", DeleteAction).WithTags("Actions")
+        api.MapDelete("/actions/{id:int}", DeleteAction).WithTags("Actions")
             .WithName("DeleteAction").WithSummary("Delete an action definition")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
