@@ -12,6 +12,132 @@ namespace DiscoverJesus.Api.Tests;
 public sealed class ReusableContentServiceTests
 {
     [Fact]
+    public async Task PublishedDiscoveryRequiresBothPublicationAndALocalizedRevision()
+    {
+        await using var db = CreateDbContext();
+        var available = await AddPageAsync(db, isPublished: true, hasEnglishRevision: true);
+        var unpublished = await AddPageAsync(db, hasEnglishRevision: true);
+        await AddPageAsync(db, isPublished: true);
+        var service = new ReusableContentService(db);
+        var ct = CancellationToken.None;
+
+        var english = await service.GetPublishedPagesAsync("EN", ct);
+        Assert.True(english.Succeeded);
+        Assert.Equal(new PublishedPageSummary(available.PublicId, available.Slug, available.Title),
+            Assert.Single(english.Value!));
+
+        var french = await service.GetPublishedPagesAsync("fr", ct);
+        Assert.True(french.Succeeded);
+        Assert.Empty(french.Value!);
+        Assert.Equal(400, (await service.GetPublishedPagesAsync("!", ct)).Error?.StatusCode);
+        Assert.Equal(404, (await service.GetPageAsync(unpublished.PublicId, "en", ct)).Error?.StatusCode);
+    }
+
+    [Fact]
+    public async Task DraftsRejectUnsupportedNodeTypesWithoutChangingStoredContent()
+    {
+        await using var db = CreateDbContext();
+        var page = await AddPageAsync(db);
+        var service = new ReusableContentService(db);
+
+        var invalidComponent = await service.CreateComponentAsync(
+            new CreateReusableComponentRequest(
+                "Unsupported",
+                "en",
+                ParseJson("""{"type":"custom-widget"}""")),
+            CancellationToken.None);
+        Assert.Equal(400, invalidComponent.Error?.StatusCode);
+        Assert.Empty(await db.ReusableComponents.ToListAsync());
+
+        var component = await service.CreateComponentAsync(
+            new CreateReusableComponentRequest(
+                "Valid",
+                "en",
+                ParseJson("""{"type":"text","value":"Original component"}""")),
+            CancellationToken.None);
+        Assert.True(component.Succeeded);
+        var originalComponentJson = (await db.ReusableComponentDrafts.SingleAsync()).ContentJson;
+
+        var rejectedComponentUpdate = await service.UpdateComponentDraftAsync(
+            component.Value!.ComponentId,
+            "en",
+            new UpdateReusableComponentDraftRequest(ParseJson("""{"type":"custom-widget"}""")),
+            CancellationToken.None);
+        Assert.Equal(400, rejectedComponentUpdate.Error?.StatusCode);
+        Assert.Equal(originalComponentJson, (await db.ReusableComponentDrafts.SingleAsync()).ContentJson);
+
+        var pageDraft = await service.UpdatePageDraftAsync(
+            page.PublicId,
+            "en",
+            new UpdatePageContentDraftRequest(ParseJson("""[{"type":"text","value":"Original page"}]""")),
+            CancellationToken.None);
+        Assert.True(pageDraft.Succeeded);
+        var originalSectionsJson = (await db.PageContentDrafts.SingleAsync()).SectionsJson;
+
+        var rejectedPageUpdate = await service.UpdatePageDraftAsync(
+            page.PublicId,
+            "en",
+            new UpdatePageContentDraftRequest(ParseJson("""[{"type":"custom-widget"}]""")),
+            CancellationToken.None);
+        Assert.Equal(400, rejectedPageUpdate.Error?.StatusCode);
+        Assert.Equal(originalSectionsJson, (await db.PageContentDrafts.SingleAsync()).SectionsJson);
+    }
+
+    [Fact]
+    public async Task DraftValidationRejectsMalformedActionShapes()
+    {
+        await using var db = CreateDbContext();
+        var page = await AddPageAsync(db);
+        var service = new ReusableContentService(db);
+
+        var result = await service.UpdatePageDraftAsync(
+            page.PublicId,
+            "en",
+            new UpdatePageContentDraftRequest(ParseJson(
+                """[{"type":"button","action":{"type":"apiCall","params":[],"method":"PATCH"}}]""")),
+            CancellationToken.None);
+
+        Assert.Equal(400, result.Error?.StatusCode);
+        var errors = string.Join(" ", result.Error!.ValidationErrors!["sections"]);
+        Assert.Contains("params must be an object", errors);
+        Assert.Contains("method must be GET, POST, PUT, or DELETE", errors);
+    }
+
+    [Fact]
+    public async Task IncompleteRoleFieldsCanBeSavedButCannotBePublished()
+    {
+        await using var db = CreateDbContext();
+        var page = await AddPageAsync(db);
+        var service = new ReusableContentService(db);
+        var incompleteHeading = ParseJson("""{"type":"text","role":"heading"}""");
+        const string incompleteSections = """[{"type":"text","role":"heading"}]""";
+
+        var pageDraft = await service.UpdatePageDraftAsync(
+            page.PublicId,
+            "en",
+            new UpdatePageContentDraftRequest(ParseJson(incompleteSections)),
+            CancellationToken.None);
+        Assert.True(pageDraft.Succeeded);
+
+        var pagePublish = await service.PublishPageAsync(page.PublicId, "en", CancellationToken.None);
+        Assert.Equal(400, pagePublish.Error?.StatusCode);
+        Assert.Empty(await db.PageContentRevisions.ToListAsync());
+        Assert.Equal(incompleteSections, (await db.PageContentDrafts.SingleAsync()).SectionsJson);
+
+        var componentDraft = await service.CreateComponentAsync(
+            new CreateReusableComponentRequest("Incomplete heading", "en", incompleteHeading),
+            CancellationToken.None);
+        Assert.True(componentDraft.Succeeded);
+        var componentPublish = await service.PublishComponentAsync(
+            componentDraft.Value!.ComponentId,
+            "en",
+            CancellationToken.None);
+        Assert.Equal(400, componentPublish.Error?.StatusCode);
+        Assert.Single(await db.ReusableComponentDrafts.ToListAsync());
+        Assert.Empty(await db.ReusableComponentRevisions.ToListAsync());
+    }
+
+    [Fact]
     public async Task PublishedPageExpandsReferencesAndPreservesProvenance()
     {
         await using var db = CreateDbContext();
@@ -338,7 +464,7 @@ public sealed class ReusableContentServiceTests
     }
 
     [Fact]
-    public async Task PageDraftRejectsUnavailableNavigationDestinations()
+    public async Task PageDraftCanSaveUnavailableNavigationButPublishingRejectsIt()
     {
         await using var db = CreateDbContext();
         var page = await AddPageAsync(db);
@@ -351,11 +477,15 @@ public sealed class ReusableContentServiceTests
             new UpdatePageContentDraftRequest(ParseJson(
                 $$$"""[{"type":"button","action":{"type":"navigate","pageId":"{{{destination.PublicId}}}"}}]""")),
             CancellationToken.None);
-        Assert.Equal(422, draft.Error?.StatusCode);
+        Assert.True(draft.Succeeded);
+        Assert.Equal(422, (await service.PublishPageAsync(
+            page.PublicId,
+            "en",
+            CancellationToken.None)).Error?.StatusCode);
     }
 
     [Fact]
-    public async Task PageDraftRejectsUnpublishedSelfNavigation()
+    public async Task PageDraftCanSaveUnpublishedSelfNavigationButPublishingRejectsIt()
     {
         await using var db = CreateDbContext();
         var page = await AddPageAsync(db, isPublished: false);
@@ -367,7 +497,11 @@ public sealed class ReusableContentServiceTests
             new UpdatePageContentDraftRequest(ParseJson(
                 $$$"""[{"type":"button","action":{"type":"navigate","pageId":"{{{page.PublicId}}}"}}]""")),
             CancellationToken.None);
-        Assert.Equal(422, draft.Error?.StatusCode);
+        Assert.True(draft.Succeeded);
+        Assert.Equal(422, (await service.PublishPageAsync(
+            page.PublicId,
+            "en",
+            CancellationToken.None)).Error?.StatusCode);
     }
 
     [Fact]
@@ -416,7 +550,7 @@ public sealed class ReusableContentServiceTests
     }
 
     [Fact]
-    public async Task DraftValidationRejectsLegacyTargetAndRequiresNavigateIfCondition()
+    public async Task DraftValidationRejectsLegacyTargetButDefersMissingConditionUntilPublish()
     {
         await using var db = CreateDbContext();
         var page = await AddPageAsync(db);
@@ -435,9 +569,11 @@ public sealed class ReusableContentServiceTests
             CancellationToken.None);
 
         Assert.Equal(400, legacyTarget.Error?.StatusCode);
-        Assert.Equal(400, missingCondition.Error?.StatusCode);
+        Assert.True(missingCondition.Succeeded);
         Assert.Contains("target", string.Join(" ", legacyTarget.Error!.ValidationErrors!["sections"]));
-        Assert.Contains("condition", string.Join(" ", missingCondition.Error!.ValidationErrors!["sections"]));
+        var publish = await service.PublishPageAsync(page.PublicId, "en", CancellationToken.None);
+        Assert.Equal(400, publish.Error?.StatusCode);
+        Assert.Contains("condition", string.Join(" ", publish.Error!.ValidationErrors!["sections"]));
     }
 
     [Fact]
@@ -472,7 +608,7 @@ public sealed class ReusableContentServiceTests
     }
 
     [Fact]
-    public async Task ComponentDraftRejectsUnavailableNavigationDestination()
+    public async Task ComponentDraftCanSaveUnavailableNavigationButPublishingRejectsIt()
     {
         await using var db = CreateDbContext();
         var destination = await AddPageAsync(db, isPublished: false);
@@ -483,7 +619,11 @@ public sealed class ReusableContentServiceTests
                 $$$"""{"type":"button","action":{"type":"navigate","pageId":"{{{destination.PublicId}}}"}}""")),
             CancellationToken.None);
 
-        Assert.Equal(422, component.Error?.StatusCode);
+        Assert.True(component.Succeeded);
+        Assert.Equal(422, (await service.PublishComponentAsync(
+            component.Value!.ComponentId,
+            "en",
+            CancellationToken.None)).Error?.StatusCode);
     }
 
     [Fact]

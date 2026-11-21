@@ -67,6 +67,10 @@ public interface IReusableContentService
         string locale,
         CancellationToken cancellationToken);
 
+    Task<ReusableContentResult<PublishedPageSummary[]>> GetPublishedPagesAsync(
+        string locale,
+        CancellationToken cancellationToken);
+
     Task<ReusableContentResult<PageContentResponse>> GetPageAsync(
         Guid pageId,
         string locale,

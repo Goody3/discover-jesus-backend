@@ -566,6 +566,51 @@
         }
       }
     },
+    "/api/content/pages": {
+      "get": {
+        "tags": [
+          "Page content"
+        ],
+        "summary": "List published pages for a locale",
+        "description": "Returns reader-facing metadata for pages with a published revision in the requested locale.",
+        "operationId": "GetPublishedPages",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublishedPageSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/content/pages/{pageId}": {
       "get": {
         "tags": [
@@ -1559,14 +1604,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "type": {
+            "maxLength": 100,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
-          "config": { }
+          "config": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1602,14 +1653,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "source": {
+            "maxLength": 500,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
-          "config": { }
+          "config": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1646,14 +1703,41 @@
         "type": "object",
         "properties": {
           "key": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "type": {
+            "maxLength": 100,
             "minLength": 1,
+            "enum": [
+              "text",
+              "image",
+              "button",
+              "stack",
+              "row",
+              "column",
+              "conditional",
+              "loop",
+              "spacer",
+              "divider",
+              "modal",
+              "Button",
+              "NBButton",
+              "Text",
+              "Header",
+              "BibleVerse",
+              "title",
+              "List",
+              "NavBar",
+              "Media"
+            ],
             "type": "string"
           },
-          "props": { },
+          "props": {
+            "type": "object"
+          },
           "sortOrder": {
             "type": "integer",
             "format": "int32"
@@ -1707,12 +1791,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "locale": {
+            "maxLength": 35,
+            "minLength": 1,
+            "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
             "type": "string"
           },
-          "content": { }
+          "content": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1825,11 +1917,15 @@
         "type": "object",
         "properties": {
           "slug": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
             "type": "string"
           },
           "title": {
+            "maxLength": 300,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "isPublished": {
@@ -1901,6 +1997,27 @@
           },
           "isPublished": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublishedPageSummary": {
+        "required": [
+          "publicId",
+          "slug",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "publicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -1995,14 +2112,21 @@
       "UpdatePageContentDraftRequest": {
         "type": "object",
         "properties": {
-          "sections": { }
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         },
         "additionalProperties": false
       },
       "UpdateReusableComponentDraftRequest": {
         "type": "object",
         "properties": {
-          "content": { }
+          "content": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2010,6 +2134,9 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           }
         },
