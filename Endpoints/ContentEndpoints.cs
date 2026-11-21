@@ -584,18 +584,20 @@ public static class ContentEndpoints
                 ["key"] = ["Key is required and must be at most 200 characters."]
             });
         }
-        if (string.IsNullOrWhiteSpace(request.Type) || request.Type.Length > 100)
+        if (string.IsNullOrWhiteSpace(request.Type)
+            || request.Type.Length > 100
+            || !ContentTypeRules.IsSupportedManagementType(request.Type))
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["type"] = ["Type is required and must be at most 100 characters."]
+                ["type"] = ["Type must be a supported component type and at most 100 characters."]
             });
         }
-        if (request.Props.ValueKind == JsonValueKind.Undefined)
+        if (request.Props.ValueKind != JsonValueKind.Object)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["props"] = ["Props is required and must be a valid JSON value."]
+                ["props"] = ["Props must be a JSON object."]
             });
         }
 
@@ -618,11 +620,11 @@ public static class ContentEndpoints
                 ["source"] = ["Source is required and must be at most 500 characters."]
             });
         }
-        if (request.Config.ValueKind == JsonValueKind.Undefined)
+        if (request.Config.ValueKind != JsonValueKind.Object)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["config"] = ["Config is required and must be a valid JSON value."]
+                ["config"] = ["Config must be a JSON object."]
             });
         }
 
@@ -645,11 +647,11 @@ public static class ContentEndpoints
                 ["type"] = ["Type is required and must be at most 100 characters."]
             });
         }
-        if (request.Config.ValueKind == JsonValueKind.Undefined)
+        if (request.Config.ValueKind != JsonValueKind.Object)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["config"] = ["Config is required and must be a valid JSON value."]
+                ["config"] = ["Config must be a JSON object."]
             });
         }
 

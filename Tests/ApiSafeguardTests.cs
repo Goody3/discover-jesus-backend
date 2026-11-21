@@ -1,5 +1,8 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
+using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Data;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
@@ -95,6 +98,95 @@ public sealed class ApiSafeguardTests
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, rejected.StatusCode);
     }
 
+    [Fact]
+    public async Task ManagementWritesRejectUnsupportedTypesAndNonObjectPayloadsWithoutPersistence()
+    {
+        await using var factory = new SafeguardTestApplication();
+        using var client = factory.CreateClient();
+
+        using var invalidPageResponse = await client.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("validation-page", new string('t', 301), false));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPageResponse.StatusCode);
+
+        using var pageBoundaryResponse = await client.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest(new string('s', 200), new string('t', 300), false));
+        Assert.Equal(HttpStatusCode.Created, pageBoundaryResponse.StatusCode);
+        using var invalidSlugResponse = await client.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest(new string('s', 201), "Too long", false));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidSlugResponse.StatusCode);
+
+        using var pageResponse = await client.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("validation-page", "Validation page", false));
+        Assert.Equal(HttpStatusCode.Created, pageResponse.StatusCode);
+        var page = await pageResponse.Content.ReadFromJsonAsync<PageSummary>();
+        Assert.NotNull(page);
+
+        using var invalidTypeResponse = await client.PostAsJsonAsync(
+            $"/api/pages/{page.Id}/components",
+            new ComponentRequest("unsupported", "custom-widget", ParseJson("{}"), 0));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidTypeResponse.StatusCode);
+
+        using var invalidPropsResponse = await client.PostAsJsonAsync(
+            $"/api/pages/{page.Id}/components",
+            new ComponentRequest("invalid-props", "text", ParseJson("[]"), 0));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPropsResponse.StatusCode);
+
+        using var componentBoundaryResponse = await client.PostAsJsonAsync(
+            $"/api/pages/{page.Id}/components",
+            new ComponentRequest(new string('k', 200), "text", ParseJson("{}"), 0));
+        Assert.Equal(HttpStatusCode.Created, componentBoundaryResponse.StatusCode);
+        using var invalidKeyResponse = await client.PostAsJsonAsync(
+            $"/api/pages/{page.Id}/components",
+            new ComponentRequest(new string('k', 201), "text", ParseJson("{}"), 1));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidKeyResponse.StatusCode);
+
+        using var componentResponse = await client.PostAsJsonAsync(
+            $"/api/pages/{page.Id}/components",
+            new ComponentRequest("legacy-button", "NBButton", ParseJson("""{"text":"Welcome"}"""), 0));
+        Assert.Equal(HttpStatusCode.Created, componentResponse.StatusCode);
+        var component = await componentResponse.Content.ReadFromJsonAsync<ComponentResponse>();
+        Assert.NotNull(component);
+
+        using var invalidBindingResponse = await client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/bindings",
+            new BindingRequest("title", "page.title", ParseJson("[]")));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidBindingResponse.StatusCode);
+
+        using var bindingResponse = await client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/bindings",
+            new BindingRequest("title", new string('s', 500), ParseJson("""{"path":"title"}""")));
+        Assert.Equal(HttpStatusCode.Created, bindingResponse.StatusCode);
+        using var invalidSourceResponse = await client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/bindings",
+            new BindingRequest("subtitle", new string('s', 501), ParseJson("""{"path":"subtitle"}""")));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidSourceResponse.StatusCode);
+
+        using var invalidActionResponse = await client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/actions",
+            new ActionRequest("tap", "open", ParseJson("null")));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidActionResponse.StatusCode);
+
+        using var actionResponse = await client.PostAsJsonAsync(
+            $"/api/components/{component.Id}/actions",
+            new ActionRequest("tap", "open", ParseJson("""{"target":"welcome"}""")));
+        Assert.Equal(HttpStatusCode.Created, actionResponse.StatusCode);
+
+        using var invalidUpdateResponse = await client.PutAsJsonAsync(
+            $"/api/components/{component.Id}",
+            new ComponentRequest("changed", "custom-widget", ParseJson("{}"), 1));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidUpdateResponse.StatusCode);
+        var storedComponent = await client.GetFromJsonAsync<ComponentResponse>(
+            $"/api/components/{component.Id}");
+        Assert.NotNull(storedComponent);
+        Assert.Equal("legacy-button", storedComponent.Key);
+        Assert.Single(storedComponent.Bindings);
+        Assert.Single(storedComponent.Actions);
+    }
+
     private static string CreatePagePayload(int byteLength)
     {
         var payload = """{"slug":"size-limit","title":"Size limit","isPublished":false,"padding":""}""";
@@ -107,8 +199,16 @@ public sealed class ApiSafeguardTests
         return payload.Insert(payload.Length - 2, new string('x', paddingLength));
     }
 
+    private static JsonElement ParseJson(string value)
+    {
+        using var document = JsonDocument.Parse(value);
+        return document.RootElement.Clone();
+    }
+
     private sealed class SafeguardTestApplication(params string[] allowedOrigins) : WebApplicationFactory<Program>
     {
+        private readonly string _databaseName = Guid.NewGuid().ToString();
+
         protected override IHost CreateHost(IHostBuilder builder)
         {
             builder.ConfigureHostConfiguration(configuration =>
@@ -135,7 +235,7 @@ public sealed class ApiSafeguardTests
                 services.RemoveAll<DbContextOptions<DiscoverJesusDbContext>>();
                 services.RemoveAll<DiscoverJesusDbContext>();
                 services.AddDbContext<DiscoverJesusDbContext>(
-                    options => options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+                    options => options.UseInMemoryDatabase(_databaseName));
             });
         }
     }

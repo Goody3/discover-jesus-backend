@@ -30,6 +30,18 @@ JSON serialization settings. Contract tests check these required fields against
 the application's HTTP JSON serializer. `/health` documents its existing
 `{ "status": "healthy" }` response through a named DTO.
 
+Request constraints are documented by
+[RequestSchemaFilter](Contracts/RequestSchemaFilter.cs) and enforced by the
+endpoint and content-service validators. Legacy management component types are
+limited to the modern component types plus the explicitly mapped legacy types;
+component props, binding configs, and action configs must be JSON objects, but
+their internal legacy properties remain opaque. Modern page and reusable
+component drafts reject malformed shapes while allowing incomplete role fields
+and unresolved destinations. Publication requires complete role-specific
+fields and validates referenced components and navigation destinations.
+Validation failures return actionable Problem Details errors without saving or
+publishing the rejected payload.
+
 ## Author account operations (STORY-019)
 
 The separate `AuthorAccounts` tool is for trusted operators only. It adds
