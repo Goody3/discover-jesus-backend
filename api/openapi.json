@@ -1604,14 +1604,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "type": {
+            "maxLength": 100,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
-          "config": { }
+          "config": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1647,14 +1653,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "source": {
+            "maxLength": 500,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
-          "config": { }
+          "config": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1691,14 +1703,41 @@
         "type": "object",
         "properties": {
           "key": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "type": {
+            "maxLength": 100,
             "minLength": 1,
+            "enum": [
+              "text",
+              "image",
+              "button",
+              "stack",
+              "row",
+              "column",
+              "conditional",
+              "loop",
+              "spacer",
+              "divider",
+              "modal",
+              "Button",
+              "NBButton",
+              "Text",
+              "Header",
+              "BibleVerse",
+              "title",
+              "List",
+              "NavBar",
+              "Media"
+            ],
             "type": "string"
           },
-          "props": { },
+          "props": {
+            "type": "object"
+          },
           "sortOrder": {
             "type": "integer",
             "format": "int32"
@@ -1752,12 +1791,20 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "locale": {
+            "maxLength": 35,
+            "minLength": 1,
+            "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
             "type": "string"
           },
-          "content": { }
+          "content": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -1870,11 +1917,15 @@
         "type": "object",
         "properties": {
           "slug": {
+            "maxLength": 200,
             "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
             "type": "string"
           },
           "title": {
+            "maxLength": 300,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "isPublished": {
@@ -2061,14 +2112,21 @@
       "UpdatePageContentDraftRequest": {
         "type": "object",
         "properties": {
-          "sections": { }
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         },
         "additionalProperties": false
       },
       "UpdateReusableComponentDraftRequest": {
         "type": "object",
         "properties": {
-          "content": { }
+          "content": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2076,6 +2134,9 @@
         "type": "object",
         "properties": {
           "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           }
         },

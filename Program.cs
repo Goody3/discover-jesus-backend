@@ -74,6 +74,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SupportNonNullableReferenceTypes();
+    options.SchemaFilter<RequestSchemaFilter>();
     options.SchemaFilter<ResponseSchemaFilter>();
     options.SwaggerDoc("v1", new OpenApiInfo
     {

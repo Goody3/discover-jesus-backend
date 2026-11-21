@@ -58,15 +58,6 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                 "A reusable component with this name already exists.");
         }
 
-        var unavailablePages = await GetUnavailablePagesAsync(
-            contentValidation.PageDestinations,
-            NormalizeLocale(request.Locale),
-            cancellationToken);
-        if (unavailablePages.Count > 0)
-        {
-            return UnavailableDestinations<ReusableComponentDraftResponse>(unavailablePages);
-        }
-
         var now = DateTimeOffset.UtcNow;
         var definition = new ReusableComponentDefinition
         {
@@ -204,15 +195,6 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         await using var transaction = await db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
-        var unavailablePages = await GetUnavailablePagesAsync(
-            contentValidation.PageDestinations,
-            normalizedLocale,
-            cancellationToken);
-        if (unavailablePages.Count > 0)
-        {
-            return UnavailableDestinations<ReusableComponentDraftResponse>(unavailablePages);
-        }
-
         var definition = await db.ReusableComponents.SingleOrDefaultAsync(
             item => item.PublicId == componentId,
             cancellationToken);
@@ -280,7 +262,9 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         }
 
         using var contentDocument = JsonDocument.Parse(draft.ContentJson);
-        var contentValidation = ValidateComponentContent(contentDocument.RootElement);
+        var contentValidation = ValidateComponentContent(
+            contentDocument.RootElement,
+            requireComplete: true);
         if (contentValidation.Errors.Count > 0)
         {
             return ValidationFailure<ReusableComponentResponse>(contentValidation.Errors);
@@ -493,14 +477,6 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         await using var transaction = await db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
-        var unavailablePages = await GetUnavailablePagesAsync(
-            validation.PageDestinations,
-            NormalizeLocale(locale),
-            cancellationToken);
-        if (unavailablePages.Count > 0)
-        {
-            return UnavailableDestinations<PageContentDraftResponse>(unavailablePages);
-        }
 
         var page = await db.Pages.SingleOrDefaultAsync(
             item => item.PublicId == pageId,
@@ -583,7 +559,7 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         }
 
         using var sectionsDocument = JsonDocument.Parse(draft.SectionsJson);
-        var validation = ValidateSections(sectionsDocument.RootElement);
+        var validation = ValidateSections(sectionsDocument.RootElement, requireComplete: true);
         if (validation.Errors.Count > 0)
         {
             return ValidationFailure<PageContentResponse>(validation.Errors, "sections");
@@ -611,7 +587,9 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         foreach (var componentJson in latestContent.Values)
         {
             using var componentDocument = JsonDocument.Parse(componentJson);
-            var componentValidation = ValidateComponentContent(componentDocument.RootElement);
+            var componentValidation = ValidateComponentContent(
+                componentDocument.RootElement,
+                requireComplete: true);
             pageDestinations.AddRange(componentValidation.PageDestinations);
         }
         var unavailablePages = await GetUnavailablePagesAsync(
@@ -843,43 +821,47 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
 
         if (validateNavigation)
         {
-                using var sectionsDocument = JsonDocument.Parse(sectionsJson);
-                var sectionsValidation = ValidateSections(sectionsDocument.RootElement);
-                if (sectionsValidation.Errors.Count > 0)
+            using var sectionsDocument = JsonDocument.Parse(sectionsJson);
+            var sectionsValidation = ValidateSections(
+                sectionsDocument.RootElement,
+                requireComplete: true);
+            if (sectionsValidation.Errors.Count > 0)
+            {
+                return ReusableContentResult<JsonElement>.Failure(
+                    500,
+                    "Stored page sections contain invalid navigation data.");
+            }
+
+            var pageDestinations = new List<Guid>(sectionsValidation.PageDestinations);
+            foreach (var componentJson in latestContent.Values)
+            {
+                using var componentDocument = JsonDocument.Parse(componentJson);
+                var componentValidation = ValidateComponentContent(
+                    componentDocument.RootElement,
+                    requireComplete: true);
+                if (componentValidation.Errors.Count > 0)
                 {
                     return ReusableContentResult<JsonElement>.Failure(
                         500,
-                        "Stored page sections contain invalid navigation data.");
+                        "A published reusable component contains invalid navigation data.");
                 }
+                pageDestinations.AddRange(componentValidation.PageDestinations);
+            }
 
-                var pageDestinations = new List<Guid>(sectionsValidation.PageDestinations);
-                foreach (var componentJson in latestContent.Values)
-                {
-                    using var componentDocument = JsonDocument.Parse(componentJson);
-                    var componentValidation = ValidateComponentContent(componentDocument.RootElement);
-                    if (componentValidation.Errors.Count > 0)
+            var unavailablePages = await GetUnavailablePagesAsync(
+                pageDestinations,
+                locale,
+                cancellationToken);
+            if (unavailablePages.Count > 0)
+            {
+                return ReusableContentResult<JsonElement>.Failure(
+                    422,
+                    "The published page contains navigation destinations that are no longer available for this locale.",
+                    new Dictionary<string, string[]>
                     {
-                        return ReusableContentResult<JsonElement>.Failure(
-                            500,
-                            "A published reusable component contains invalid navigation data.");
-                    }
-                    pageDestinations.AddRange(componentValidation.PageDestinations);
-                }
-
-                var unavailablePages = await GetUnavailablePagesAsync(
-                    pageDestinations,
-                    locale,
-                    cancellationToken);
-                if (unavailablePages.Count > 0)
-                {
-                    return ReusableContentResult<JsonElement>.Failure(
-                        422,
-                        "The published page contains navigation destinations that are no longer available for this locale.",
-                        new Dictionary<string, string[]>
-                        {
-                            ["pageIds"] = unavailablePages.Select(id => id.ToString()).ToArray()
-                        });
-                }
+                        ["pageIds"] = unavailablePages.Select(id => id.ToString()).ToArray()
+                    });
+            }
         }
 
         var expanded = await ExpandNodeAsync(sectionArray, latestContent, 0) as JsonArray;
@@ -985,25 +967,32 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
     }
 
     private static (List<string> Errors, List<Guid> ComponentReferences, List<Guid> PageDestinations)
-        ValidateSections(JsonElement sections)
+        ValidateSections(JsonElement sections, bool requireComplete = false)
     {
         var errors = new List<string>();
         var componentReferences = new List<Guid>();
         var pageDestinations = new List<Guid>();
         if (sections.ValueKind != JsonValueKind.Array)
         {
-            return ([ "Sections must be an array." ], componentReferences, pageDestinations);
+            return (["Sections must be an array."], componentReferences, pageDestinations);
         }
 
         foreach (var section in sections.EnumerateArray())
         {
-            ValidateNode(section, "sections", 0, errors, componentReferences, pageDestinations);
+            ValidateNode(
+                section,
+                "sections",
+                0,
+                errors,
+                componentReferences,
+                pageDestinations,
+                requireComplete: requireComplete);
         }
         return (errors, componentReferences, pageDestinations);
     }
 
     private static (List<string> Errors, List<Guid> PageDestinations)
-        ValidateComponentContent(JsonElement content)
+        ValidateComponentContent(JsonElement content, bool requireComplete = false)
     {
         var errors = new List<string>();
         var pageDestinations = new List<Guid>();
@@ -1019,7 +1008,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             errors,
             [],
             pageDestinations,
-            allowComponentReferences: false);
+            allowComponentReferences: false,
+            requireComplete: requireComplete);
         return (errors, pageDestinations);
     }
 
@@ -1030,7 +1020,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         List<string> errors,
         List<Guid> componentReferences,
         List<Guid> pageDestinations,
-        bool allowComponentReferences = true)
+        bool allowComponentReferences = true,
+        bool requireComplete = false)
     {
         if (depth > MaximumNodeDepth)
         {
@@ -1067,8 +1058,14 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                     errors.Add($"{path}.{property.Name} is not allowed on a component reference.");
                 }
             }
-            if (!node.TryGetProperty("componentId", out var idElement)
-                || idElement.ValueKind != JsonValueKind.String
+            if (!node.TryGetProperty("componentId", out var idElement))
+            {
+                if (requireComplete)
+                {
+                    errors.Add($"{path}.componentId is required and must be a UUID.");
+                }
+            }
+            else if (idElement.ValueKind != JsonValueKind.String
                 || !Guid.TryParse(idElement.GetString(), out var componentId))
             {
                 errors.Add($"{path}.componentId must be a UUID.");
@@ -1083,8 +1080,15 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                 ValidateNodeArray(overrideChildren, $"{path}.children", depth + 1, errors,
                     componentReferences,
                     pageDestinations,
-                    allowComponentReferences);
+                    allowComponentReferences,
+                    requireComplete);
             }
+            return;
+        }
+
+        if (type is null || !ContentTypeRules.IsSupportedNodeType(type))
+        {
+            errors.Add($"{path}.type is not a supported component type.");
             return;
         }
 
@@ -1092,6 +1096,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         {
             errors.Add($"{path}.sourceComponentId is response-only metadata.");
         }
+
+        ValidateNodeShape(node, type, path, errors, requireComplete);
 
         foreach (var childPropertyName in new[] { "children", "true", "false" })
         {
@@ -1101,7 +1107,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                     errors,
                     componentReferences,
                     pageDestinations,
-                    allowComponentReferences);
+                    allowComponentReferences,
+                    requireComplete);
             }
         }
         if (node.TryGetProperty("template", out var template))
@@ -1109,11 +1116,283 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             ValidateNode(template, $"{path}.template", depth + 1, errors,
                 componentReferences,
                 pageDestinations,
-                allowComponentReferences);
+                allowComponentReferences,
+                requireComplete);
         }
         if (node.TryGetProperty("action", out var action))
         {
-            ValidateAction(action, $"{path}.action", errors, pageDestinations);
+            ValidateAction(
+                action,
+                $"{path}.action",
+                errors,
+                pageDestinations,
+                requireComplete: requireComplete);
+        }
+    }
+
+    private static void ValidateNodeShape(
+        JsonElement node,
+        string type,
+        string path,
+        List<string> errors,
+        bool requireComplete)
+    {
+        foreach (var propertyName in new[]
+        {
+            "value", "label", "reference", "version", "src", "altText", "legacyAttribute",
+            "condition", "source", "role"
+        })
+        {
+            ValidateOptionalString(node, propertyName, path, errors);
+        }
+
+        if (node.TryGetProperty("headingLevel", out var headingLevel)
+            && (headingLevel.ValueKind != JsonValueKind.Number
+                || !headingLevel.TryGetInt32(out var level)
+                || level is < 1 or > 3))
+        {
+            errors.Add($"{path}.headingLevel must be 1, 2, or 3.");
+        }
+        if (node.TryGetProperty("sourcePageId", out var sourcePageId)
+            && (sourcePageId.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(sourcePageId.GetString(), out _)))
+        {
+            errors.Add($"{path}.sourcePageId must be a UUID.");
+        }
+
+        if (node.TryGetProperty("style", out var style))
+        {
+            if (style.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add($"{path}.style must be an object.");
+            }
+            else
+            {
+                ValidateOptionalString(style, "textSize", $"{path}.style", errors);
+                ValidateOptionalString(style, "listStyle", $"{path}.style", errors);
+                ValidateOptionalString(style, "alignment", $"{path}.style", errors);
+                ValidateOptionalString(style, "fontSize", $"{path}.style", errors);
+                if (style.TryGetProperty("textSize", out var textSize)
+                    && textSize.ValueKind == JsonValueKind.String
+                    && textSize.GetString() is not ("small" or "medium" or "large"))
+                {
+                    errors.Add($"{path}.style.textSize must be small, medium, or large.");
+                }
+                if (style.TryGetProperty("listStyle", out var listStyle)
+                    && listStyle.ValueKind == JsonValueKind.String
+                    && listStyle.GetString() is not ("ordered" or "unordered"))
+                {
+                    errors.Add($"{path}.style.listStyle must be ordered or unordered.");
+                }
+            }
+        }
+
+        if (node.TryGetProperty("legacySource", out var legacySource))
+        {
+            if (legacySource.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add($"{path}.legacySource must be an object.");
+            }
+            else
+            {
+                RequireProperty(
+                    legacySource,
+                    "key",
+                    JsonValueKind.String,
+                    $"{path}.legacySource",
+                    errors,
+                    required: true);
+                if (!legacySource.TryGetProperty("componentId", out var componentId)
+                    || componentId.ValueKind != JsonValueKind.Number)
+                {
+                    errors.Add($"{path}.legacySource.componentId is required and must be a number.");
+                }
+            }
+        }
+
+        if (!node.TryGetProperty("role", out var roleElement)
+            || roleElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        var role = roleElement.GetString();
+        if (role is not ("heading" or "scripture-reference" or "title" or "list"
+            or "navigation" or "navigation-item"))
+        {
+            errors.Add($"{path}.role is not a supported semantic role.");
+            return;
+        }
+
+        var expectedType = role switch
+        {
+            "heading" or "scripture-reference" or "title" => "text",
+            "list" or "navigation" => "stack",
+            "navigation-item" => "button",
+            _ => type
+        };
+        if (type != expectedType)
+        {
+            errors.Add($"{path}.type must be {expectedType} for role {role}.");
+        }
+
+        switch (role)
+        {
+            case "heading":
+                RequireProperty(node, "value", JsonValueKind.String, path, errors, requireComplete);
+                RequireProperty(node, "headingLevel", JsonValueKind.Number, path, errors, requireComplete);
+                break;
+            case "scripture-reference":
+                RequireProperty(node, "value", JsonValueKind.String, path, errors, requireComplete);
+                RequireProperty(node, "reference", JsonValueKind.String, path, errors, requireComplete);
+                RequireProperty(node, "version", JsonValueKind.String, path, errors, requireComplete);
+                break;
+            case "title":
+                RequireProperty(node, "value", JsonValueKind.String, path, errors, requireComplete);
+                break;
+            case "list":
+                RequireProperty(node, "label", JsonValueKind.String, path, errors, requireComplete);
+                RequireProperty(node, "children", JsonValueKind.Array, path, errors, requireComplete);
+                RequireProperty(node, "style", JsonValueKind.Object, path, errors, requireComplete);
+                if (node.TryGetProperty("style", out var listStyle)
+                    && listStyle.ValueKind == JsonValueKind.Object)
+                {
+                    RequireProperty(
+                        listStyle,
+                        "listStyle",
+                        JsonValueKind.String,
+                        $"{path}.style",
+                        errors,
+                        requireComplete);
+                }
+                if (requireComplete
+                    && node.TryGetProperty("children", out var listChildren)
+                    && listChildren.ValueKind == JsonValueKind.Array)
+                {
+                    ValidateListChildren(listChildren, path, errors);
+                }
+                break;
+            case "navigation":
+                RequireProperty(node, "children", JsonValueKind.Array, path, errors, requireComplete);
+                if (requireComplete
+                    && node.TryGetProperty("children", out var navigationChildren)
+                    && navigationChildren.ValueKind == JsonValueKind.Array)
+                {
+                    ValidateNavigationChildren(navigationChildren, path, errors);
+                }
+                break;
+            case "navigation-item":
+                RequireProperty(node, "value", JsonValueKind.String, path, errors, requireComplete);
+                RequireProperty(node, "action", JsonValueKind.Object, path, errors, requireComplete);
+                if (node.TryGetProperty("action", out var navigationAction)
+                    && navigationAction.ValueKind == JsonValueKind.Object)
+                {
+                    if (navigationAction.TryGetProperty("type", out var actionType)
+                        && actionType.ValueKind == JsonValueKind.String
+                        && actionType.GetString() != "navigate")
+                    {
+                        errors.Add($"{path}.action.type must be navigate for a navigation-item.");
+                    }
+                    RequireProperty(
+                        navigationAction,
+                        "pageId",
+                        JsonValueKind.String,
+                        $"{path}.action",
+                        errors,
+                        requireComplete);
+                }
+                break;
+        }
+    }
+
+    private static void ValidateListChildren(JsonElement children, string path, List<string> errors)
+    {
+        var index = 0;
+        foreach (var child in children.EnumerateArray())
+        {
+            var childPath = $"{path}.children[{index++}]";
+            if (child.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add($"{childPath} must be an object.");
+                continue;
+            }
+            if (!child.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "text")
+            {
+                errors.Add($"{childPath}.type must be text.");
+            }
+            RequireProperty(child, "value", JsonValueKind.String, childPath, errors, required: true);
+        }
+    }
+
+    private static void ValidateNavigationChildren(
+        JsonElement children,
+        string path,
+        List<string> errors)
+    {
+        var index = 0;
+        foreach (var child in children.EnumerateArray())
+        {
+            var childPath = $"{path}.children[{index++}]";
+            if (child.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add($"{childPath} must be an object.");
+                continue;
+            }
+            if (!child.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "button")
+            {
+                errors.Add($"{childPath}.type must be button.");
+            }
+            if (!child.TryGetProperty("role", out var role)
+                || role.ValueKind != JsonValueKind.String
+                || role.GetString() != "navigation-item")
+            {
+                errors.Add($"{childPath}.role must be navigation-item.");
+            }
+            RequireProperty(child, "value", JsonValueKind.String, childPath, errors, required: true);
+            RequireProperty(child, "action", JsonValueKind.Object, childPath, errors, required: true);
+            if (child.TryGetProperty("action", out var action)
+                && action.ValueKind == JsonValueKind.Object)
+            {
+                if (!action.TryGetProperty("type", out var actionType)
+                    || actionType.ValueKind != JsonValueKind.String
+                    || actionType.GetString() != "navigate")
+                {
+                    errors.Add($"{childPath}.action.type must be navigate.");
+                }
+                RequireProperty(
+                    action,
+                    "pageId",
+                    JsonValueKind.String,
+                    $"{childPath}.action",
+                    errors,
+                    required: true);
+            }
+        }
+    }
+
+    private static void RequireProperty(
+        JsonElement value,
+        string propertyName,
+        JsonValueKind kind,
+        string path,
+        List<string> errors,
+        bool required)
+    {
+        if (!value.TryGetProperty(propertyName, out var property))
+        {
+            if (required)
+            {
+                errors.Add($"{path}.{propertyName} is required.");
+            }
+            return;
+        }
+        if (property.ValueKind != kind)
+        {
+            errors.Add($"{path}.{propertyName} must be {kind.ToString().ToLowerInvariant()}.");
         }
     }
 
@@ -1124,7 +1403,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         List<string> errors,
         List<Guid> componentReferences,
         List<Guid> pageDestinations,
-        bool allowComponentReferences = true)
+        bool allowComponentReferences = true,
+        bool requireComplete = false)
     {
         if (value.ValueKind != JsonValueKind.Array)
         {
@@ -1137,7 +1417,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             ValidateNode(node, $"{path}[{index++}]", depth, errors,
                 componentReferences,
                 pageDestinations,
-                allowComponentReferences);
+                allowComponentReferences,
+                requireComplete);
         }
     }
 
@@ -1146,7 +1427,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         string path,
         List<string> errors,
         List<Guid> pageDestinations,
-        int depth = 0)
+        int depth = 0,
+        bool requireComplete = false)
     {
         if (depth > MaximumNodeDepth)
         {
@@ -1174,31 +1456,57 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             return;
         }
 
+        ValidateOptionalString(action, "pageId", path, errors);
+        ValidateOptionalString(action, "modalId", path, errors);
+        ValidateOptionalString(action, "url", path, errors);
+        ValidateOptionalString(action, "condition", path, errors);
+        ValidateOptionalString(action, "endpoint", path, errors);
+        ValidateOptionalString(action, "method", path, errors);
+        ValidateOptionalString(action, "animation", path, errors);
+        ValidateOptionalObject(action, "params", path, errors);
+        ValidateOptionalObject(action, "body", path, errors);
+
+        if (action.TryGetProperty("method", out var method)
+            && method.ValueKind == JsonValueKind.String
+            && method.GetString() is not ("GET" or "POST" or "PUT" or "DELETE"))
+        {
+            errors.Add($"{path}.method must be GET, POST, PUT, or DELETE.");
+        }
+        if (action.TryGetProperty("animation", out var animation)
+            && animation.ValueKind == JsonValueKind.String
+            && animation.GetString() is not ("fadeIn" or "fadeOut" or "slideUp" or "slideDown"))
+        {
+            errors.Add($"{path}.animation is not a supported animation.");
+        }
+
         switch (type)
         {
             case "navigate":
-                ValidatePageId(action, path, errors, pageDestinations);
+                if (requireComplete || action.TryGetProperty("pageId", out _))
+                {
+                    ValidatePageId(action, path, errors, pageDestinations);
+                }
                 RejectOtherDestinations(action, path, errors, "condition", "modalId", "url");
                 break;
             case "navigateIf":
-                ValidatePageId(action, path, errors, pageDestinations);
-                if (!action.TryGetProperty("condition", out var condition)
-                    || condition.ValueKind != JsonValueKind.String
-                    || string.IsNullOrWhiteSpace(condition.GetString()))
+                if (requireComplete || action.TryGetProperty("pageId", out _))
                 {
-                    errors.Add($"{path}.condition is required for navigateIf.");
+                    ValidatePageId(action, path, errors, pageDestinations);
                 }
+                ValidateRequiredString(action, "condition", path, errors, requireComplete);
                 RejectOtherDestinations(action, path, errors, "modalId", "url");
                 break;
             case "showModal":
-                RequireString(action, "modalId", path, errors);
+                ValidateRequiredString(action, "modalId", path, errors, requireComplete);
                 RejectOtherDestinations(action, path, errors, "pageId", "url");
                 break;
             case "openExternalUrl":
-                if (!action.TryGetProperty("url", out var urlElement)
-                    || urlElement.ValueKind != JsonValueKind.String
-                    || !Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out var uri)
-                    || uri.Scheme != Uri.UriSchemeHttps)
+                ValidateRequiredString(action, "url", path, errors, requireComplete);
+                if (action.TryGetProperty("url", out var urlElement)
+                    && urlElement.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(urlElement.GetString())
+                    && (!Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out var uri)
+                        || uri.Scheme != Uri.UriSchemeHttps))
                 {
                     errors.Add($"{path}.url must be an absolute HTTPS URL.");
                 }
@@ -1210,7 +1518,13 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         {
             if (action.TryGetProperty(nestedName, out var nested))
             {
-                ValidateAction(nested, $"{path}.{nestedName}", errors, pageDestinations, depth + 1);
+                ValidateAction(
+                    nested,
+                    $"{path}.{nestedName}",
+                    errors,
+                    pageDestinations,
+                    depth + 1,
+                    requireComplete);
             }
         }
         if (action.TryGetProperty("actions", out var actions))
@@ -1225,9 +1539,58 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
                 foreach (var nested in actions.EnumerateArray())
                 {
                     ValidateAction(nested, $"{path}.actions[{index++}]", errors,
-                        pageDestinations, depth + 1);
+                        pageDestinations, depth + 1, requireComplete);
                 }
             }
+        }
+    }
+
+    private static void ValidateOptionalString(
+        JsonElement value,
+        string propertyName,
+        string path,
+        List<string> errors)
+    {
+        if (value.TryGetProperty(propertyName, out var property)
+            && property.ValueKind != JsonValueKind.String)
+        {
+            errors.Add($"{path}.{propertyName} must be a string.");
+        }
+    }
+
+    private static void ValidateOptionalObject(
+        JsonElement value,
+        string propertyName,
+        string path,
+        List<string> errors)
+    {
+        if (value.TryGetProperty(propertyName, out var property)
+            && property.ValueKind != JsonValueKind.Object)
+        {
+            errors.Add($"{path}.{propertyName} must be an object.");
+        }
+    }
+
+    private static void ValidateRequiredString(
+        JsonElement value,
+        string propertyName,
+        string path,
+        List<string> errors,
+        bool requireComplete)
+    {
+        if (!value.TryGetProperty(propertyName, out var property))
+        {
+            if (requireComplete)
+            {
+                errors.Add($"{path}.{propertyName} is required.");
+            }
+            return;
+        }
+        if (property.ValueKind == JsonValueKind.String
+            && requireComplete
+            && string.IsNullOrWhiteSpace(property.GetString()))
+        {
+            errors.Add($"{path}.{propertyName} must not be empty when publishing.");
         }
     }
 
@@ -1245,20 +1608,6 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             return;
         }
         pageDestinations.Add(pageId);
-    }
-
-    private static void RequireString(
-        JsonElement value,
-        string propertyName,
-        string path,
-        List<string> errors)
-    {
-        if (!value.TryGetProperty(propertyName, out var property)
-            || property.ValueKind != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(property.GetString()))
-        {
-            errors.Add($"{path}.{propertyName} is required and must be a non-empty string.");
-        }
     }
 
     private static void RejectOtherDestinations(
@@ -1312,9 +1661,9 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             : "Locale must be a BCP 47-style language tag.";
 
     private static string? ValidateComponentName(string name) =>
-        !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 200
+        !string.IsNullOrWhiteSpace(name) && name.Length <= 200
             ? null
-            : "Name must contain 1 to 200 non-whitespace characters.";
+            : "Name must contain 1 to 200 characters and cannot be whitespace.";
 
     private static string NormalizeComponentName(string name) =>
         name.Trim().ToUpperInvariant();
