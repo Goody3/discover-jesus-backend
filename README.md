@@ -1,6 +1,6 @@
 # Discover Jesus Backend
 
-A .NET 8 minimal API for serving and managing dynamic page definitions, reusable
+A .NET 10 minimal API for serving and managing dynamic page definitions, reusable
 components, data bindings, and action definitions. SQL Server is used for
 persistence; EF Core migrations create and evolve the database schema.
 
@@ -42,35 +42,78 @@ fields and validates referenced components and navigation destinations.
 Validation failures return actionable Problem Details errors without saving or
 publishing the rejected payload.
 
-## Author account operations (STORY-019)
+## Author account and passkey operations (STORY-019, STORY-025)
 
-The separate `AuthorAccounts` tool is for trusted operators only. It adds
-no HTTP routes, sign-in or sessions. Provisioning returns an application UUID
-with no grants. Disabling an account retains the account and its history; a
-disabled account cannot receive new grants. Existing grants can still be
-revoked. Each actual change and its audit row are saved together.
+The separate `AuthorAccounts` tool is for trusted operators only. It provisions
+accounts without grants, changes grants, disables accounts, issues one-time
+24-hour passkey enrollment invitations, and lists or revokes credentials.
+Disabling an account retains its history and revokes existing sessions. A
+disabled account cannot receive new grants. Each actual account or credential
+change and its audit row are saved together.
 
 After an approved deployment has applied the additive migration, set
 `AuthorAccounts__ConnectionString` securely using an individually attributable
 database identity, separate from the API and migration identities. Do not
 use a shared login: the audit actor comes from SQL Server's original login.
-The operator needs read and insert access for accounts, grants, and audit
-records, update access for accounts, and delete access for grants only. Do
-not grant update or delete access to audit records.
+The operator needs read and insert access for accounts, grants, invitations,
+passkeys, sessions, and audit records; update access for accounts, invitations,
+passkeys, and sessions; and delete access for grants only. Do not grant update
+or delete access to audit records.
 
 ```sh
 dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" provision
 dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" grant "$ACCOUNT_ID" DraftEditor
 dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" revoke "$ACCOUNT_ID" DraftEditor
 dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" disable "$ACCOUNT_ID"
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" invite "$ACCOUNT_ID"
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" list-passkeys "$ACCOUNT_ID"
+dotnet run --project Tools/AuthorAccounts -- "$DEV_SQL_SERVER" "$DEV_SQL_DATABASE" revoke-passkey "$ACCOUNT_ID" "$PASSKEY_ID"
 ```
 
 Set `ACCOUNT_ID` to the UUID printed by `provision`. The server and database
 arguments must match the configured connection target. Use `Publisher` for
-an explicit publisher grant. These records are not yet used to authorize
-HTTP access; enforcement is a later EPIC-004 story. If a write does not
-confirm success, reconcile the account and audit rows before retrying,
-especially for provisioning, which allocates a new UUID on each invocation.
+an explicit publisher grant. Deliver an invitation token out of band and do
+not put it in source control or logs. For recovery, revoke the lost passkey,
+then issue a new invitation; invitation issuance is refused while the account
+has any active passkey. `list-passkeys` reports the passkey ID needed for
+revocation. If an operation does not confirm success, reconcile the account,
+credential, and audit records before retrying.
+
+## Author authentication and authorization (STORY-022, STORY-025)
+
+The API uses the pinned `Fido2` and `Fido2.AspNet` 4.3.3 packages. Configure
+`WebAuthn:RPID`, `WebAuthn:RPName`, and the exact `WebAuthn:Origins` array.
+In Production, `Cors:AllowedOrigins` must exactly match `WebAuthn:Origins`;
+credentialed CORS is never enabled for arbitrary origins. Development defaults
+are limited to the local `localhost` Studio origin. Configure the production
+development RP ID as `studio-dev.onebreathpeople.com` and the origin as
+`https://studio-dev.onebreathpeople.com` for the accepted development
+environment. Production must use its own Studio RP ID and origin.
+
+An operator invitation is single-use, expires after 24 hours, and is stored
+only as a cryptographic hash. WebAuthn challenges are durable, expire after
+five minutes, and are single-use. Sign-in requires discoverable credentials
+and user verification. The API stores only each credential's public key,
+identifier, and signature counter; revoked credentials cannot create sessions.
+
+Successful enrollment and sign-in issue an opaque, eight-hour `__Host-`
+cookie with `Secure`, `HttpOnly`, `SameSite=Lax`, and `Path=/`. Only a hash of
+the session secret is stored. The server enforces a 30-minute idle timeout,
+revokes sessions on sign-out, credential revocation, account disablement, and
+loss of all grants, and resolves current roles from SQL Server on every
+request. State-changing authenticated requests require the session-bound
+`X-CSRF-Token` returned by `GET /api/auth/session`.
+
+Authoring route groups require explicit authorization; only `/health`, the
+published page reader routes, and the passkey invitation/sign-in ceremonies are
+marked anonymous. Authoring reads and draft routes require `DraftEditor` or
+`Publisher`; legacy page-management writes, inline component/binding/action
+writes, publication, withdrawal, and deletion require `Publisher`. Editorial
+publication, withdrawal, and deletion records are persisted with the change
+and identify the authenticated account. The test-only identity handler is
+registered only by test hosts and is not available in a running application.
+Passkey invitation, sign-in, and registration ceremonies are limited to ten
+requests per minute per client IP; authoring routes are limited to thirty.
 
 ## Data model
 
@@ -129,6 +172,10 @@ All resource endpoints are under `/api`.
 | POST | `/content/pages/{pageId}/draft/from-published?locale={locale}` | Start a draft by copying the latest published sections |
 | POST | `/content/pages/{pageId}/publish?locale={locale}` | Validate and publish a page-content revision |
 | GET | `/health` | API availability check |
+| POST | `/auth/invitations/registration-options`, `/auth/invitations/registration` | Enroll a passkey with a one-time operator invitation |
+| POST | `/auth/sign-in/options`, `/auth/sign-in` | Start and complete username-less passkey sign-in |
+| GET, POST | `/auth/session`, `/auth/sign-out` | Read the current session/CSRF token or revoke the session |
+| GET, POST, DELETE | `/auth/passkeys`, `/auth/passkeys/registration-options`, `/auth/passkeys/{passkeyId}` | List, add, or revoke an author's passkeys |
 
 Create and update endpoints accept JSON. `props` and `config` are arbitrary JSON
 values and are returned as JSON values, not escaped JSON strings. Missing resources
@@ -150,8 +197,9 @@ The new content API uses the page's public UUID as `pageId`; legacy management
 routes continue using integer IDs and slugs. Component references and typed
 navigation destinations are validated when drafts are saved and published.
 Page delivery rechecks component and page destinations and reports an error if
-a destination is no longer available. Publishing and withdrawal authorization
-has not yet been defined or implemented.
+a destination is no longer available. Public reader routes are explicitly
+anonymous; the authorization rules for management, draft, publication, and
+withdrawal routes are described in the author authentication section above.
 
 Starting a draft from published content copies the stored section JSON as-is,
 preserving reusable-component references and overrides. It returns `409` if a
@@ -293,14 +341,14 @@ dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filte
 
 The test host supplies a non-secret configuration value for startup and does
 not open a database connection. It writes the served document to
-`Tests/bin/Release/net8.0/TestResults/openapi.generated.json`, including when the
+`Tests/bin/Release/net10.0/TestResults/openapi.generated.json`, including when the
 comparison fails. CI uploads this as the `generated-openapi` artifact.
 
 For an intentional API change, inspect that generated document and review the
 contract difference before updating:
 
 ```sh
-cp Tests/bin/Release/net8.0/TestResults/openapi.generated.json api/openapi.json
+cp Tests/bin/Release/net10.0/TestResults/openapi.generated.json api/openapi.json
 git diff -- api/openapi.json
 dotnet test Tests/DiscoverJesus.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~OpenApiContractTests
 ```

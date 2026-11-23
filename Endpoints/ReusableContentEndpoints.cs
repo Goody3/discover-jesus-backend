@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Services;
 
@@ -11,7 +12,9 @@ public static class ReusableContentEndpoints
     {
         var reusableComponents = endpoints.MapGroup("/api/reusable-components")
             .WithTags("Reusable components")
-            .RequireRateLimiting("authoring");
+            .RequireRateLimiting("authoring")
+            .RequireAuthorization("Author")
+            .RequireCsrfProtection();
         var readerPages = endpoints.MapGroup("/api/content/pages")
             .WithTags("Page content")
             .RequireRateLimiting("published-reader");
@@ -53,6 +56,7 @@ public static class ReusableContentEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status422UnprocessableEntity);
         reusableComponents.MapPost("/{componentId:guid}/publish", PublishComponent)
+            .RequireAuthorization("Publisher")
             .WithName("PublishReusableComponent")
             .WithSummary("Publish a validated locale draft as an immutable revision")
             .Produces<ReusableComponentResponse>()
@@ -61,12 +65,14 @@ public static class ReusableContentEndpoints
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status422UnprocessableEntity);
         reusableComponents.MapPost("/{componentId:guid}/withdraw", WithdrawComponent)
+            .RequireAuthorization("Publisher")
             .WithName("WithdrawReusableComponent")
             .WithSummary("Withdraw a reusable component when no page versions reference it")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
         reusableComponents.MapDelete("/{componentId:guid}", DeleteComponent)
+            .RequireAuthorization("Publisher")
             .WithName("DeleteReusableComponent")
             .WithSummary("Delete a reusable component when no page versions reference it")
             .Produces(StatusCodes.Status204NoContent)
@@ -90,7 +96,9 @@ public static class ReusableContentEndpoints
             .Produces(StatusCodes.Status422UnprocessableEntity);
         var pageAuthoring = endpoints.MapGroup("/api/content/pages")
             .WithTags("Page content")
-            .RequireRateLimiting("authoring");
+            .RequireRateLimiting("authoring")
+            .RequireAuthorization("Author")
+            .RequireCsrfProtection();
         pageAuthoring.MapGet("/{pageId:guid}/draft", GetPageDraft)
             .WithName("GetPageContentDraft")
             .WithSummary("Get a page content draft for a locale")
@@ -112,6 +120,7 @@ public static class ReusableContentEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status422UnprocessableEntity);
         pageAuthoring.MapPost("/{pageId:guid}/publish", PublishPage)
+            .RequireAuthorization("Publisher")
             .WithName("PublishPageContent")
             .WithSummary("Validate references and publish a page content revision")
             .Produces<PageContentResponse>()
@@ -180,25 +189,32 @@ public static class ReusableContentEndpoints
     private static async Task<IResult> PublishComponent(
         Guid componentId,
         string locale,
+        ClaimsPrincipal user,
         IReusableContentService service,
         CancellationToken cancellationToken) =>
-        ToResult(await service.PublishComponentAsync(componentId, locale, cancellationToken));
+        ToResult(await service.PublishComponentAsync(
+            componentId,
+            locale,
+            cancellationToken,
+            GetAccountId(user)));
 
     private static async Task<IResult> WithdrawComponent(
         Guid componentId,
+        ClaimsPrincipal user,
         IReusableContentService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.WithdrawComponentAsync(componentId, cancellationToken);
+        var result = await service.WithdrawComponentAsync(componentId, cancellationToken, GetAccountId(user));
         return result.Succeeded ? Results.NoContent() : ToResult(result);
     }
 
     private static async Task<IResult> DeleteComponent(
         Guid componentId,
+        ClaimsPrincipal user,
         IReusableContentService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.DeleteComponentAsync(componentId, cancellationToken);
+        var result = await service.DeleteComponentAsync(componentId, cancellationToken, GetAccountId(user));
         return result.Succeeded ? Results.NoContent() : ToResult(result);
     }
 
@@ -240,9 +256,13 @@ public static class ReusableContentEndpoints
     private static async Task<IResult> PublishPage(
         Guid pageId,
         string locale,
+        ClaimsPrincipal user,
         IReusableContentService service,
         CancellationToken cancellationToken) =>
-        ToResult(await service.PublishPageAsync(pageId, locale, cancellationToken));
+        ToResult(await service.PublishPageAsync(pageId, locale, cancellationToken, GetAccountId(user)));
+
+    private static Guid GetAccountId(ClaimsPrincipal user) =>
+        Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     private static IResult ToResult<T>(ReusableContentResult<T> result)
     {

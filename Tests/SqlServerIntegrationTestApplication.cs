@@ -1,10 +1,14 @@
 using DiscoverJesus.Api.Data;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using DiscoverJesus.Api.Models;
 
 namespace DiscoverJesus.Api.Tests;
 
@@ -57,13 +61,27 @@ internal sealed class SqlServerIntegrationTestApplication : IAsyncDisposable
                 builder.ConfigureAppConfiguration((_, configuration) =>
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["ConnectionStrings:DefaultConnection"] = connectionString
+                        ["ConnectionStrings:DefaultConnection"] = connectionString,
+                        ["WebAuthn:RPID"] = "localhost",
+                        ["WebAuthn:Origins:0"] = "http://localhost:5173",
+                        ["Cors:AllowedOrigins:0"] = "http://localhost:5173"
                     }));
+                builder.ConfigureTestServices(services =>
+                {
+                    services.AddAuthentication(options =>
+                    {
+                        options.DefaultAuthenticateScheme = TestAuthenticationHandler.SchemeName;
+                        options.DefaultChallengeScheme = TestAuthenticationHandler.SchemeName;
+                        options.DefaultForbidScheme = TestAuthenticationHandler.SchemeName;
+                    }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                        TestAuthenticationHandler.SchemeName,
+                        _ => { });
+                });
             });
 
-        var application = new SqlServerIntegrationTestApplication(
-            applicationFactory,
-            applicationFactory.CreateClient());
+        var client = applicationFactory.CreateClient();
+        ConfigureTestClient(client);
+        var application = new SqlServerIntegrationTestApplication(applicationFactory, client);
 
         try
         {
@@ -83,6 +101,18 @@ internal sealed class SqlServerIntegrationTestApplication : IAsyncDisposable
             await using var scope = applicationFactory.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<DiscoverJesusDbContext>();
             await db.Database.MigrateAsync();
+            db.AuthorAccounts.Add(new AuthorAccount
+            {
+                Id = TestAuthenticationHandler.AccountId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Version = Guid.NewGuid()
+            });
+            db.AuthorGrants.Add(new AuthorGrant
+            {
+                AccountId = TestAuthenticationHandler.AccountId,
+                Role = AuthorRole.Publisher
+            });
+            await db.SaveChangesAsync();
             return application;
         }
         catch
@@ -90,6 +120,12 @@ internal sealed class SqlServerIntegrationTestApplication : IAsyncDisposable
             await application.DisposeAsync();
             throw;
         }
+    }
+
+    private static void ConfigureTestClient(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Add("X-Test-Auth", "enabled");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", TestAuthenticationHandler.CsrfToken);
     }
 
     public async ValueTask DisposeAsync()
@@ -102,6 +138,7 @@ internal sealed class SqlServerIntegrationTestApplication : IAsyncDisposable
                 var db = scope.ServiceProvider.GetRequiredService<DiscoverJesusDbContext>();
                 await db.Database.EnsureDeletedAsync();
             }
+
         }
         finally
         {

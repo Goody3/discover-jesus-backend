@@ -27,6 +27,7 @@ public sealed class AuthorAccountService(DiscoverJesusDbContext db, TimeProvider
 
         var now = clock.GetUtcNow();
         account.DisabledAt = now;
+        await RevokeSessionsAsync(accountId, now, cancellationToken);
         await SaveChangeAsync(account, actor, AuthorAccountAction.Disabled, null, now, cancellationToken);
         return true;
     }
@@ -52,8 +53,16 @@ public sealed class AuthorAccountService(DiscoverJesusDbContext db, TimeProvider
         else
             db.AuthorGrants.Remove(existing);
 
+        var now = clock.GetUtcNow();
+        if (!granted && !await db.AuthorGrants.AnyAsync(
+                item => item.AccountId == accountId && item.Role != role,
+                cancellationToken))
+        {
+            await RevokeSessionsAsync(accountId, now, cancellationToken);
+        }
+
         await SaveChangeAsync(account, actor, granted ? AuthorAccountAction.Granted : AuthorAccountAction.Revoked,
-            role, clock.GetUtcNow(), cancellationToken);
+            role, now, cancellationToken);
         return true;
     }
 
@@ -76,6 +85,20 @@ public sealed class AuthorAccountService(DiscoverJesusDbContext db, TimeProvider
         {
             AccountId = id, Actor = actor, Action = action, Role = role, OccurredAt = now,
         });
+
+    private async Task RevokeSessionsAsync(
+        Guid accountId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var sessions = await db.AuthorWebSessions
+            .Where(session => session.AccountId == accountId && session.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+        foreach (var session in sessions)
+        {
+            session.RevokedAt = now;
+        }
+    }
 
     private static void ValidateActor(string actor)
     {

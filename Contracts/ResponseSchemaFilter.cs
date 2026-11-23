@@ -18,14 +18,18 @@ public sealed class ResponseSchemaFilter : ISchemaFilter
         typeof(ReusableComponentResponse),
         typeof(PageContentDraftResponse),
         typeof(PageContentResponse),
-        typeof(PublishedPageSummary)
+        typeof(PublishedPageSummary),
+        typeof(AuthorSessionResponse),
+        typeof(AuthorPasskeyResponse)
     ];
 
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
         // These output-only DTOs always serialize every property, including false and null.
         // Do not change request validation or apply this rule to framework error responses.
-        if (ResponseTypes.Contains(context.Type))
+        if (ResponseTypes.Contains(context.Type)
+            || context.Type.IsGenericType
+            && context.Type.GetGenericTypeDefinition() == typeof(PasskeyOptionsResponse<>))
         {
             schema.Required.UnionWith(schema.Properties.Keys);
         }

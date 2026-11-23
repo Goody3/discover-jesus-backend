@@ -36,15 +36,18 @@ public interface IReusableContentService
     Task<ReusableContentResult<ReusableComponentResponse>> PublishComponentAsync(
         Guid componentId,
         string locale,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null);
 
     Task<ReusableContentResult<bool>> WithdrawComponentAsync(
         Guid componentId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null);
 
     Task<ReusableContentResult<bool>> DeleteComponentAsync(
         Guid componentId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null);
 
     Task<ReusableContentResult<PageContentDraftResponse>> GetPageDraftAsync(
         Guid pageId,
@@ -65,7 +68,8 @@ public interface IReusableContentService
     Task<ReusableContentResult<PageContentResponse>> PublishPageAsync(
         Guid pageId,
         string locale,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null);
 
     Task<ReusableContentResult<PublishedPageSummary[]>> GetPublishedPagesAsync(
         string locale,

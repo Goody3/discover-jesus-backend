@@ -33,6 +33,8 @@ public sealed class OpenApiContractTests
         yield return [new ReusableComponentResponse(Guid.Empty, "", "", 0, json, default)];
         yield return [new PageContentDraftResponse(Guid.Empty, "", json, default)];
         yield return [new PageContentResponse(Guid.Empty, "", "", 0, json)];
+        yield return [new AuthorSessionResponse(Guid.Empty, [], "")];
+        yield return [new AuthorPasskeyResponse(Guid.Empty, "", default, null, null)];
     }
 
     [Theory]
@@ -55,11 +57,42 @@ public sealed class OpenApiContractTests
         Assert.Equal(body.Select(property => property.Key).Order(), required);
         foreach (var (name, property) in properties)
         {
-            if (property!["type"]?.GetValue<string>() is "string" or "array")
+            if (property!["nullable"]?.GetValue<bool>() != true
+                && property["type"]?.GetValue<string>() is "string" or "array")
             {
                 Assert.NotNull(body[name]);
             }
         }
+    }
+
+    [Fact]
+    public async Task OpaqueRequestJsonRemainsOpenInTheOpenApiContract()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        var document = JsonNode.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"))!;
+        var schemas = document["components"]!["schemas"]!;
+
+        foreach (var (schemaName, propertyName) in new[]
+        {
+            ("ComponentRequest", "props"),
+            ("BindingRequest", "config"),
+            ("ActionRequest", "config"),
+            ("CreateReusableComponentRequest", "content"),
+            ("UpdateReusableComponentDraftRequest", "content")
+        })
+        {
+            Assert.IsType<JsonObject>(
+                schemas[schemaName]!["properties"]![propertyName]!["additionalProperties"]);
+        }
+
+        Assert.Equal(
+            "object",
+            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]!["type"]!
+                .GetValue<string>());
+        Assert.IsType<JsonObject>(
+            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]![
+                "additionalProperties"]);
     }
 
     [Fact]
@@ -135,6 +168,23 @@ public sealed class OpenApiContractTests
             "and follow the contract update instructions in README.md.");
     }
 
+    [Fact]
+    public async Task OpenApiMarksReaderRoutesAnonymousAndAuthoringRoutesProtected()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        var document = JsonNode.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"))!;
+        var paths = document["paths"]!;
+
+        Assert.Null(paths["/api/content/pages"]!["get"]!["security"]);
+        Assert.NotNull(paths["/api/content/pages/{pageId}/draft"]!["get"]!["security"]);
+        Assert.Null(paths["/api/auth/sign-in/options"]!["post"]!["security"]);
+        Assert.NotNull(paths["/api/reusable-components/{componentId}/publish"]!["post"]!["security"]);
+        Assert.Contains(
+            paths["/api/reusable-components/{componentId}/publish"]!["post"]!["parameters"]!.AsArray(),
+            parameter => parameter?["name"]?.GetValue<string>() == "X-CSRF-Token");
+    }
+
     private sealed class ContractTestApplication : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
@@ -143,7 +193,10 @@ public sealed class OpenApiContractTests
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:DefaultConnection"] =
-                        "Server=localhost;Database=DiscoverJesusContractTests;Integrated Security=True;TrustServerCertificate=True"
+                        "Server=localhost;Database=DiscoverJesusContractTests;Integrated Security=True;TrustServerCertificate=True",
+                    ["WebAuthn:RPID"] = "localhost",
+                    ["WebAuthn:Origins:0"] = "http://localhost:5173",
+                    ["Cors:AllowedOrigins:0"] = "http://localhost:5173"
                 }));
             return base.CreateHost(builder);
         }

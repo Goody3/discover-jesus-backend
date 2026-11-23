@@ -41,7 +41,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -57,6 +62,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -97,7 +111,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/actions/{id}": {
@@ -132,7 +151,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -148,6 +172,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -188,7 +221,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -205,6 +243,15 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -214,7 +261,535 @@
           "404": {
             "description": "Not Found"
           }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      }
+    },
+    "/api/auth/invitations/registration-options": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Start passkey enrollment with a one-time operator invitation",
+        "operationId": "CreateInvitationPasskeyOptions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationRegistrationOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialCreateOptionsPasskeyOptionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
         }
+      }
+    },
+    "/api/auth/invitations/registration": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Complete first passkey enrollment for an invited author",
+        "operationId": "CompleteInvitationPasskeyRegistration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteInvitationRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-in/options": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Start username-less passkey sign-in",
+        "operationId": "CreatePasskeySignInOptions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssertionOptionsPasskeyOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-in": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Complete username-less passkey sign-in",
+        "operationId": "CompletePasskeySignIn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/session": {
+      "get": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Get the current author session and a fresh CSRF token",
+        "operationId": "GetAuthorSession",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      }
+    },
+    "/api/auth/sign-out": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Revoke the current author session",
+        "operationId": "SignOutAuthor",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      }
+    },
+    "/api/auth/passkeys": {
+      "get": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "List active passkeys for the current author",
+        "operationId": "GetAuthorPasskeys",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuthorPasskeyResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Complete registration of an additional passkey",
+        "operationId": "CompleteAdditionalPasskeyRegistration",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteAuthenticatedRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      }
+    },
+    "/api/auth/passkeys/registration-options": {
+      "post": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Start registration of an additional passkey",
+        "operationId": "CreateAdditionalPasskeyOptions",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialCreateOptionsPasskeyOptionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
+      }
+    },
+    "/api/auth/passkeys/{passkeyId}": {
+      "delete": {
+        "tags": [
+          "Author authentication"
+        ],
+        "summary": "Revoke one active passkey without changing the author account",
+        "operationId": "RevokeAuthorPasskey",
+        "parameters": [
+          {
+            "name": "passkeyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/components/{componentId}/bindings": {
@@ -252,7 +827,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -268,6 +848,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -308,7 +897,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/bindings/{id}": {
@@ -343,7 +937,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -359,6 +958,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -399,7 +1007,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -416,6 +1029,15 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -425,7 +1047,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/components/{id}": {
@@ -460,7 +1087,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -476,6 +1108,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -516,7 +1157,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -533,6 +1179,15 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -542,7 +1197,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/health": {
@@ -717,7 +1377,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -738,6 +1403,15 @@
           {
             "name": "locale",
             "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
             "required": true,
             "schema": {
               "type": "string"
@@ -781,7 +1455,12 @@
           "422": {
             "description": "Unprocessable Content"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/content/pages/{pageId}/draft/from-published": {
@@ -804,6 +1483,15 @@
           {
             "name": "locale",
             "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
             "required": true,
             "schema": {
               "type": "string"
@@ -837,7 +1525,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/content/pages/{pageId}/publish": {
@@ -860,6 +1553,15 @@
           {
             "name": "locale",
             "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
             "required": true,
             "schema": {
               "type": "string"
@@ -896,7 +1598,12 @@
           "422": {
             "description": "Unprocessable Content"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/pages": {
@@ -920,7 +1627,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -928,6 +1640,17 @@
         ],
         "summary": "Create a page",
         "operationId": "CreatePage",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -962,7 +1685,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/pages/by-public-id/{pageId}": {
@@ -997,7 +1725,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/pages/{id}": {
@@ -1015,6 +1748,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1055,7 +1797,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -1072,6 +1819,15 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1081,7 +1837,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/pages/{pageId}/components": {
@@ -1119,7 +1880,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -1135,6 +1901,15 @@
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1175,7 +1950,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/reusable-components": {
@@ -1199,7 +1979,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -1207,6 +1992,17 @@
         ],
         "summary": "Create a named reusable component and locale draft",
         "operationId": "CreateReusableComponent",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1244,7 +2040,12 @@
           "422": {
             "description": "Unprocessable Content"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/reusable-components/{componentId}": {
@@ -1262,6 +2063,15 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1302,7 +2112,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -1353,7 +2168,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -1370,6 +2190,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1382,7 +2211,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/reusable-components/{componentId}/draft": {
@@ -1435,7 +2269,12 @@
           "404": {
             "description": "Not Found"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -1456,6 +2295,15 @@
           {
             "name": "locale",
             "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
             "required": true,
             "schema": {
               "type": "string"
@@ -1499,7 +2347,12 @@
           "422": {
             "description": "Unprocessable Content"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/reusable-components/{componentId}/publish": {
@@ -1522,6 +2375,15 @@
           {
             "name": "locale",
             "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
             "required": true,
             "schema": {
               "type": "string"
@@ -1558,7 +2420,12 @@
           "422": {
             "description": "Unprocessable Content"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     },
     "/api/reusable-components/{componentId}/withdraw": {
@@ -1577,6 +2444,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Session-bound CSRF token returned by GET /api/auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1589,7 +2465,12 @@
           "409": {
             "description": "Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "AuthorSession": [ ]
+          }
+        ]
       }
     }
   },
@@ -1616,7 +2497,8 @@
             "type": "string"
           },
           "config": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": { }
           }
         },
         "additionalProperties": false
@@ -1644,6 +2526,473 @@
         },
         "additionalProperties": false
       },
+      "Algorithm": {
+        "enum": [
+          -65535,
+          -259,
+          -258,
+          -257,
+          -47,
+          -39,
+          -38,
+          -37,
+          -36,
+          -35,
+          -8,
+          -7
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "AssertionOptions": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rpId": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKeyCredentialDescriptor"
+            }
+          },
+          "userVerification": {
+            "$ref": "#/components/schemas/UserVerificationRequirement"
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKeyCredentialHint"
+            }
+          },
+          "extensions": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientInputs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssertionOptionsPasskeyOptionsResponse": {
+        "required": [
+          "challengeId",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "options": {
+            "$ref": "#/components/schemas/AssertionOptions"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssertionResponse": {
+        "required": [
+          "authenticatorData",
+          "clientDataJSON",
+          "signature"
+        ],
+        "type": "object",
+        "properties": {
+          "authenticatorData": {
+            "type": "string",
+            "format": "byte"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "clientDataJSON": {
+            "type": "string",
+            "format": "byte"
+          },
+          "userHandle": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AttestationConveyancePreference": {
+        "enum": [
+          "none",
+          "indirect",
+          "direct",
+          "enterprise"
+        ],
+        "type": "string"
+      },
+      "AttestationResponse": {
+        "required": [
+          "attestationObject",
+          "clientDataJSON",
+          "transports"
+        ],
+        "type": "object",
+        "properties": {
+          "attestationObject": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "clientDataJSON": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthenticatorTransport"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AttestationStatementFormatIdentifier": {
+        "enum": [
+          "packed",
+          "tpm",
+          "android-key",
+          "android-safetynet",
+          "fido-u2f",
+          "apple",
+          "none"
+        ],
+        "type": "string"
+      },
+      "AuthenticationExtensionsClientInputs": {
+        "type": "object",
+        "properties": {
+          "example.extension.bool": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "appid": {
+            "type": "string",
+            "nullable": true
+          },
+          "exts": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "uvm": {
+            "type": "boolean",
+            "nullable": true,
+            "writeOnly": true
+          },
+          "credProps": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "prf": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsPRFInputs"
+          },
+          "largeBlob": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsLargeBlobInputs"
+          },
+          "credentialProtectionPolicy": {
+            "$ref": "#/components/schemas/CredentialProtectionPolicy"
+          },
+          "enforceCredentialProtectionPolicy": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsClientOutputs": {
+        "type": "object",
+        "properties": {
+          "example.extension.bool": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "appid": {
+            "type": "boolean"
+          },
+          "exts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "uvm": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "nullable": true
+          },
+          "credProps": {
+            "$ref": "#/components/schemas/CredentialPropertiesOutput"
+          },
+          "prf": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsPRFOutputs"
+          },
+          "largeBlob": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsLargeBlobOutputs"
+          },
+          "credProtect": {
+            "$ref": "#/components/schemas/CredentialProtectionPolicy"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsLargeBlobInputs": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "$ref": "#/components/schemas/LargeBlobSupport"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "write": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsLargeBlobOutputs": {
+        "type": "object",
+        "properties": {
+          "supported": {
+            "type": "boolean"
+          },
+          "blob": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "written": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsPRFInputs": {
+        "type": "object",
+        "properties": {
+          "eval": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsPRFValues"
+          },
+          "evalByCredential": {
+            "$ref": "#/components/schemas/StringAuthenticationExtensionsPRFValuesKeyValuePair"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsPRFOutputs": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "results": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsPRFValues"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticationExtensionsPRFValues": {
+        "required": [
+          "first"
+        ],
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "string",
+            "format": "byte"
+          },
+          "second": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticatorAssertionRawResponse": {
+        "required": [
+          "clientExtensionResults",
+          "id",
+          "rawId",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string",
+            "format": "byte"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AssertionResponse"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PublicKeyCredentialType"
+          },
+          "extensions": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientOutputs"
+          },
+          "clientExtensionResults": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientOutputs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticatorAttachment": {
+        "enum": [
+          "platform",
+          "cross-platform"
+        ],
+        "type": "string"
+      },
+      "AuthenticatorAttestationRawResponse": {
+        "required": [
+          "clientExtensionResults",
+          "id",
+          "rawId",
+          "response",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "rawId": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PublicKeyCredentialType"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AttestationResponse"
+          },
+          "extensions": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientOutputs"
+          },
+          "clientExtensionResults": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientOutputs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticatorSelection": {
+        "type": "object",
+        "properties": {
+          "authenticatorAttachment": {
+            "$ref": "#/components/schemas/AuthenticatorAttachment"
+          },
+          "residentKey": {
+            "$ref": "#/components/schemas/ResidentKeyRequirement"
+          },
+          "requireResidentKey": {
+            "type": "boolean",
+            "deprecated": true
+          },
+          "userVerification": {
+            "$ref": "#/components/schemas/UserVerificationRequirement"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthenticatorTransport": {
+        "enum": [
+          "usb",
+          "nfc",
+          "ble",
+          "smart-card",
+          "hybrid",
+          "internal"
+        ],
+        "type": "string"
+      },
+      "AuthorPasskeyResponse": {
+        "required": [
+          "createdAt",
+          "id",
+          "lastUsedAt",
+          "name",
+          "revokedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthorSessionResponse": {
+        "required": [
+          "accountId",
+          "csrfToken",
+          "roles"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "csrfToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "BindingRequest": {
         "required": [
           "config",
@@ -1665,7 +3014,8 @@
             "type": "string"
           },
           "config": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": { }
           }
         },
         "additionalProperties": false
@@ -1690,6 +3040,54 @@
             "type": "string"
           },
           "config": { }
+        },
+        "additionalProperties": false
+      },
+      "CompleteAuthenticatedRegistrationRequest": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/AuthenticatorAttestationRawResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompleteInvitationRegistrationRequest": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invitationToken": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/AuthenticatorAttestationRawResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompleteSignInRequest": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/AuthenticatorAssertionRawResponse"
+          }
         },
         "additionalProperties": false
       },
@@ -1736,7 +3134,8 @@
             "type": "string"
           },
           "props": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": { }
           },
           "sortOrder": {
             "type": "integer",
@@ -1803,7 +3202,124 @@
             "type": "string"
           },
           "content": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": { }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CredentialCreateOptions": {
+        "required": [
+          "challenge",
+          "pubKeyCredParams",
+          "rp",
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "rp": {
+            "$ref": "#/components/schemas/PublicKeyCredentialRpEntity"
+          },
+          "user": {
+            "$ref": "#/components/schemas/Fido2User"
+          },
+          "challenge": {
+            "type": "string",
+            "format": "byte"
+          },
+          "pubKeyCredParams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PubKeyCredParam"
+            }
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "attestation": {
+            "$ref": "#/components/schemas/AttestationConveyancePreference"
+          },
+          "attestationFormats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttestationStatementFormatIdentifier"
+            }
+          },
+          "authenticatorSelection": {
+            "$ref": "#/components/schemas/AuthenticatorSelection"
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKeyCredentialHint"
+            }
+          },
+          "excludeCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKeyCredentialDescriptor"
+            }
+          },
+          "extensions": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsClientInputs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CredentialCreateOptionsPasskeyOptionsResponse": {
+        "required": [
+          "challengeId",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "options": {
+            "$ref": "#/components/schemas/CredentialCreateOptions"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CredentialPropertiesOutput": {
+        "type": "object",
+        "properties": {
+          "rk": {
+            "type": "boolean"
+          },
+          "authenticatorDisplayName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CredentialProtectionPolicy": {
+        "enum": [
+          "userVerificationOptional",
+          "userVerificationOptionalWithCredentialIDList",
+          "userVerificationRequired"
+        ],
+        "type": "string"
+      },
+      "Fido2User": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -1855,6 +3371,22 @@
           }
         },
         "additionalProperties": { }
+      },
+      "InvitationRegistrationOptionsRequest": {
+        "type": "object",
+        "properties": {
+          "invitationToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LargeBlobSupport": {
+        "enum": [
+          "required",
+          "preferred"
+        ],
+        "type": "string"
       },
       "PageContentDraftResponse": {
         "required": [
@@ -2001,6 +3533,96 @@
         },
         "additionalProperties": false
       },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "PubKeyCredParam": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/PublicKeyCredentialType"
+          },
+          "alg": {
+            "$ref": "#/components/schemas/Algorithm"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicKeyCredentialDescriptor": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/PublicKeyCredentialType"
+          },
+          "id": {
+            "type": "string",
+            "format": "byte"
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthenticatorTransport"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicKeyCredentialHint": {
+        "enum": [
+          "security-key",
+          "client-device",
+          "hybrid"
+        ],
+        "type": "string"
+      },
+      "PublicKeyCredentialRpEntity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicKeyCredentialType": {
+        "enum": [
+          "public-key",
+          "invalid"
+        ],
+        "type": "string"
+      },
       "PublishedPageSummary": {
         "required": [
           "publicId",
@@ -2021,6 +3643,14 @@
           }
         },
         "additionalProperties": false
+      },
+      "ResidentKeyRequirement": {
+        "enum": [
+          "required",
+          "preferred",
+          "discouraged"
+        ],
+        "type": "string"
       },
       "ReusableComponentDraftResponse": {
         "required": [
@@ -2109,13 +3739,27 @@
         },
         "additionalProperties": false
       },
+      "StringAuthenticationExtensionsPRFValuesKeyValuePair": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "$ref": "#/components/schemas/AuthenticationExtensionsPRFValues"
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdatePageContentDraftRequest": {
         "type": "object",
         "properties": {
           "sections": {
             "type": "array",
             "items": {
-              "type": "object"
+              "type": "object",
+              "additionalProperties": { }
             }
           }
         },
@@ -2125,7 +3769,8 @@
         "type": "object",
         "properties": {
           "content": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": { }
           }
         },
         "additionalProperties": false
@@ -2141,6 +3786,22 @@
           }
         },
         "additionalProperties": false
+      },
+      "UserVerificationRequirement": {
+        "enum": [
+          "required",
+          "preferred",
+          "discouraged"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "AuthorSession": {
+        "type": "apiKey",
+        "description": "Opaque, secure, HttpOnly author session cookie.",
+        "name": "__Host-DiscoverJesusAuthor",
+        "in": "cookie"
       }
     }
   }

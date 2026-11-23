@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Start SQL Server container
         run: |
@@ -74,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-openapi
-          path: Tests/bin/Release/net8.0/TestResults/openapi.generated.json
+          path: Tests/bin/Release/net10.0/TestResults/openapi.generated.json
           if-no-files-found: ignore
 
       - name: Summarize coverage
@@ -122,7 +122,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Scan NuGet packages for known vulnerabilities
         run: |

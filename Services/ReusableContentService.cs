@@ -233,7 +233,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
     public async Task<ReusableContentResult<ReusableComponentResponse>> PublishComponentAsync(
         Guid componentId,
         string locale,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null)
     {
         var localeError = ValidateLocale(locale);
         if (localeError is not null)
@@ -296,6 +297,10 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         };
         db.ReusableComponentRevisions.Add(revision);
         db.ReusableComponentDrafts.Remove(draft);
+        if (actorAccountId is Guid actor)
+        {
+            AddEditorialAudit(actor, EditorialAuditAction.Published, "ReusableComponent", componentId.ToString("D"));
+        }
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -305,7 +310,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
 
     public async Task<ReusableContentResult<bool>> WithdrawComponentAsync(
         Guid componentId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
@@ -327,6 +333,10 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         }
 
         definition.IsWithdrawn = true;
+        if (actorAccountId is Guid actor)
+        {
+            AddEditorialAudit(actor, EditorialAuditAction.Withdrawn, "ReusableComponent", componentId.ToString("D"));
+        }
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return ReusableContentResult<bool>.Success(true);
@@ -334,7 +344,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
 
     public async Task<ReusableContentResult<bool>> DeleteComponentAsync(
         Guid componentId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
@@ -364,6 +375,10 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
             db.ReusableComponentRevisionLineages.RemoveRange(lineages);
         }
 
+        if (actorAccountId is Guid actor)
+        {
+            AddEditorialAudit(actor, EditorialAuditAction.Deleted, "ReusableComponent", componentId.ToString("D"));
+        }
         db.ReusableComponents.Remove(definition);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -528,7 +543,8 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
     public async Task<ReusableContentResult<PageContentResponse>> PublishPageAsync(
         Guid pageId,
         string locale,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? actorAccountId = null)
     {
         var localeError = ValidateLocale(locale);
         if (localeError is not null)
@@ -631,6 +647,10 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         db.PageContentRevisions.Add(revision);
         db.PageContentDrafts.Remove(draft);
         page.IsPublished = true;
+        if (actorAccountId is Guid actor)
+        {
+            AddEditorialAudit(actor, EditorialAuditAction.Published, "PageContent", pageId.ToString("D"));
+        }
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -1669,6 +1689,20 @@ public sealed class ReusableContentService(DiscoverJesusDbContext db) : IReusabl
         name.Trim().ToUpperInvariant();
 
     private static string NormalizeLocale(string locale) => locale.ToLowerInvariant();
+
+    private void AddEditorialAudit(
+        Guid accountId,
+        EditorialAuditAction action,
+        string resourceType,
+        string resourceId) =>
+        db.EditorialAuditRecords.Add(new EditorialAuditRecord
+        {
+            AccountId = accountId,
+            Action = action,
+            ResourceType = resourceType,
+            ResourceId = resourceId,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
 
     private static JsonElement ParseJson(string json)
     {
