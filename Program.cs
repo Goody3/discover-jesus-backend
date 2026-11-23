@@ -1,4 +1,6 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using DiscoverJesus.Api;
 using DiscoverJesus.Api.Contracts;
@@ -11,6 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 const long maximumRequestBodySize = 1024 * 1024;
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var relyingPartyId = builder.Configuration["WebAuthn:RPID"]
+    ?? (builder.Environment.IsDevelopment() ? "localhost" : null);
+var relyingPartyName = builder.Configuration["WebAuthn:RPName"] ?? "Discover Jesus Content Studio";
+var webAuthnOrigins = builder.Configuration.GetSection("WebAuthn:Origins").Get<string[]>()
+    ?? (builder.Environment.IsDevelopment() ? ["http://localhost:5173"] : []);
 
 if (allowedOrigins.Any(origin =>
         !Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin)
@@ -31,16 +38,65 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "Configure the SQL Server connection string with ConnectionStrings:DefaultConnection.");
 }
 
+if (string.IsNullOrWhiteSpace(relyingPartyId)
+    || Uri.CheckHostName(relyingPartyId) == UriHostNameType.Unknown
+    || webAuthnOrigins.Length == 0
+    || webAuthnOrigins.Any(origin =>
+        !Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin)
+        || parsedOrigin.Scheme is not ("http" or "https")
+        || parsedOrigin.UserInfo.Length != 0
+        || parsedOrigin.AbsolutePath != "/"
+        || parsedOrigin.Query.Length != 0
+        || parsedOrigin.Fragment.Length != 0
+        || !string.Equals(origin, parsedOrigin.GetLeftPart(UriPartial.Authority), StringComparison.Ordinal)
+        || !string.Equals(parsedOrigin.Host, relyingPartyId, StringComparison.OrdinalIgnoreCase)))
+{
+    throw new InvalidOperationException(
+        "Configure WebAuthn:RPID and exact WebAuthn:Origins matching that relying-party host.");
+}
+
+if (builder.Environment.IsProduction()
+    && (webAuthnOrigins.Length != 1
+        || allowedOrigins.Length != 1
+        || !allowedOrigins.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(webAuthnOrigins)))
+{
+    throw new InvalidOperationException(
+        "Production must configure exactly one matching Cors:AllowedOrigins and WebAuthn:Origins entry.");
+}
+
 builder.Services.AddDbContext<DiscoverJesusDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddScoped<IReusableContentService, ReusableContentService>();
+builder.Services.AddScoped<PasskeyAuthenticationService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddFido2(options =>
+{
+    options.RPID = relyingPartyId;
+    options.RPName = relyingPartyName;
+    options.Origins = webAuthnOrigins.ToHashSet(StringComparer.OrdinalIgnoreCase);
+});
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = AuthorSessionDefaults.Scheme;
+        options.DefaultChallengeScheme = AuthorSessionDefaults.Scheme;
+        options.DefaultForbidScheme = AuthorSessionDefaults.Scheme;
+    })
+    .AddScheme<AuthenticationSchemeOptions, AuthorSessionAuthenticationHandler>(
+        AuthorSessionDefaults.Scheme,
+        _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Author", policy => policy.RequireRole("DraftEditor", "Publisher"));
+    options.AddPolicy("Publisher", policy => policy.RequireRole("Publisher"));
+});
 builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = maximumRequestBodySize);
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
     if (allowedOrigins.Length > 0)
     {
-        policy.WithOrigins(allowedOrigins);
+        policy.WithOrigins(allowedOrigins).AllowCredentials();
     }
 
     policy.AllowAnyHeader().AllowAnyMethod();
@@ -68,6 +124,16 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
+    options.AddPolicy("authentication", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientAddress(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
@@ -76,6 +142,14 @@ builder.Services.AddSwaggerGen(options =>
     options.SupportNonNullableReferenceTypes();
     options.SchemaFilter<RequestSchemaFilter>();
     options.SchemaFilter<ResponseSchemaFilter>();
+    options.OperationFilter<AuthorSecurityOperationFilter>();
+    options.AddSecurityDefinition(AuthorSessionDefaults.Scheme, new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Cookie,
+        Name = AuthorSessionDefaults.CookieName,
+        Description = "Opaque, secure, HttpOnly author session cookie."
+    });
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Discover Jesus Content API",
@@ -108,13 +182,19 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseAuthentication();
+app.UseMiddleware<CsrfProtectionMiddleware>();
+app.UseAuthorization();
+
 app.MapGet("/health", () => Results.Ok(new HealthResponse("healthy")))
+    .AllowAnonymous()
     .WithName("GetHealth")
     .WithTags("Health")
     .WithSummary("Check API availability")
     .Produces<HealthResponse>();
 app.MapContentEndpoints();
 app.MapReusableContentEndpoints();
+app.MapAuthorAuthenticationEndpoints();
 
 app.Run();
 

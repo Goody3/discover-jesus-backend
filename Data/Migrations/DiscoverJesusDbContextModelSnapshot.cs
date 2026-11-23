@@ -17,7 +17,7 @@ namespace DiscoverJesus.Api.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -106,7 +106,7 @@ namespace DiscoverJesus.Api.Data.Migrations
 
                     b.ToTable("AuthorAccountAudits", t =>
                         {
-                            t.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole", "([Action] IN (1, 4) AND [Role] IS NULL) OR ([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))");
+                            t.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole", "([Action] IN (1, 4, 5, 6, 7, 8) AND [Role] IS NULL) OR ([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))");
                         });
                 });
 
@@ -124,6 +124,189 @@ namespace DiscoverJesus.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_AuthorGrants_Role", "[Role] IN (1, 2)");
                         });
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorPasskey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("CredentialIdHash")
+                        .IsRequired()
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("SignatureCounter")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialIdHash")
+                        .IsUnique();
+
+                    b.HasIndex("AccountId", "RevokedAt");
+
+                    b.ToTable("AuthorPasskeys");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorPasskeyInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("AccountId", "ExpiresAt");
+
+                    b.ToTable("AuthorPasskeyInvitations");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorWebAuthnChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("InvitationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("InvitationId");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("Purpose", "ExpiresAt");
+
+                    b.ToTable("AuthorWebAuthnChallenges");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorWebSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("CredentialId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CsrfTokenHash")
+                        .IsRequired()
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastActivityAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SessionTokenHash")
+                        .IsRequired()
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId");
+
+                    b.HasIndex("SessionTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("AccountId", "RevokedAt", "ExpiresAt");
+
+                    b.ToTable("AuthorWebSessions");
                 });
 
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>
@@ -193,6 +376,43 @@ namespace DiscoverJesus.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Components");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.EditorialAuditRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResourceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "OccurredAt");
+
+                    b.ToTable("EditorialAuditRecords", t =>
+                        {
+                            t.HasCheckConstraint("CK_EditorialAuditRecords_Action", "[Action] IN (1, 2, 3)");
+                        });
                 });
 
             modelBuilder.Entity("DiscoverJesus.Api.Models.Page", b =>
@@ -508,6 +728,57 @@ namespace DiscoverJesus.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorPasskey", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorPasskeyInvitation", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorWebAuthnChallenge", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorPasskeyInvitation", null)
+                        .WithMany()
+                        .HasForeignKey("InvitationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorWebSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.AuthorWebSession", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorPasskey", null)
+                        .WithMany()
+                        .HasForeignKey("CredentialId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DiscoverJesus.Api.Models.Binding", b =>
                 {
                     b.HasOne("DiscoverJesus.Api.Models.Component", "Component")
@@ -528,6 +799,15 @@ namespace DiscoverJesus.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Page");
+                });
+
+            modelBuilder.Entity("DiscoverJesus.Api.Models.EditorialAuditRecord", b =>
+                {
+                    b.HasOne("DiscoverJesus.Api.Models.AuthorAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DiscoverJesus.Api.Models.PageComponentReference", b =>

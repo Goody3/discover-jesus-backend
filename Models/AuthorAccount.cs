@@ -26,6 +26,10 @@ public enum AuthorAccountAction
     Granted = 2,
     Revoked = 3,
     Disabled = 4,
+    InvitationIssued = 5,
+    InvitationRevoked = 6,
+    CredentialRegistered = 7,
+    CredentialRevoked = 8,
 }
 
 public sealed class AuthorAccountAudit

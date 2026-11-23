@@ -4,11 +4,15 @@ using System.Text;
 using System.Text.Json;
 using DiscoverJesus.Api.Contracts;
 using DiscoverJesus.Api.Data;
+using DiscoverJesus.Api.Models;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -48,6 +52,7 @@ public sealed class ApiSafeguardTests
 
         Assert.Equal(HttpStatusCode.NoContent, allowedResponse.StatusCode);
         Assert.Equal(StudioOrigin, Assert.Single(allowedResponse.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.Equal("true", Assert.Single(allowedResponse.Headers.GetValues("Access-Control-Allow-Credentials")));
     }
 
     [Fact]
@@ -77,6 +82,60 @@ public sealed class ApiSafeguardTests
 
         using var authoringLimit = await authoringClient.GetAsync("/api/pages/");
         Assert.Equal(HttpStatusCode.TooManyRequests, authoringLimit.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthoringRoutesRequireTestHostIdentityAndPublisherForLiveWrites()
+    {
+        await using var factory = new SafeguardTestApplication();
+        using var anonymous = factory.CreateClient();
+        anonymous.DefaultRequestHeaders.Remove("X-Test-Auth");
+        using var unauthorized = await anonymous.GetAsync("/api/pages/");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+
+        using var draftEditor = factory.CreateClient();
+        draftEditor.DefaultRequestHeaders.Remove("X-Test-Roles");
+        draftEditor.DefaultRequestHeaders.Add("X-Test-Roles", "DraftEditor");
+        using var forbidden = await draftEditor.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("draft-editor-page", "Draft editor", false));
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        using var publisher = factory.CreateClient();
+        using var created = await publisher.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("publisher-page", "Publisher", false));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        publisher.DefaultRequestHeaders.Remove("X-CSRF-Token");
+        using var csrfRejected = await publisher.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("missing-csrf-page", "Missing CSRF", false));
+        Assert.Equal(HttpStatusCode.Forbidden, csrfRejected.StatusCode);
+    }
+
+    [Fact]
+    public async Task LivePublicationAndDeletionAreAuditedWithTheTestHostActor()
+    {
+        await using var factory = new SafeguardTestApplication();
+        using var client = factory.CreateClient();
+        using var createResponse = await client.PostAsJsonAsync(
+            "/api/pages/",
+            new PageRequest("audited-page", "Audited page", true));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var page = await createResponse.Content.ReadFromJsonAsync<PageSummary>();
+        Assert.NotNull(page);
+
+        using var deleteResponse = await client.DeleteAsync($"/api/pages/{page.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DiscoverJesusDbContext>();
+        var records = await db.EditorialAuditRecords.OrderBy(record => record.Id).ToListAsync();
+        Assert.Equal(
+            [EditorialAuditAction.Published, EditorialAuditAction.Deleted],
+            records.Select(record => record.Action));
+        Assert.All(records, record => Assert.Equal(TestAuthenticationHandler.AccountId, record.AccountId));
     }
 
     [Fact]
@@ -216,7 +275,9 @@ public sealed class ApiSafeguardTests
                 var values = new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:DefaultConnection"] =
-                        "Server=localhost;Database=DiscoverJesusSafeguardTests;Integrated Security=True;TrustServerCertificate=True"
+                        "Server=localhost;Database=DiscoverJesusSafeguardTests;Integrated Security=True;TrustServerCertificate=True",
+                    ["WebAuthn:RPID"] = "localhost",
+                    ["WebAuthn:Origins:0"] = "http://localhost:5173"
                 };
                 for (var index = 0; index < allowedOrigins.Length; index++)
                 {
@@ -233,10 +294,33 @@ public sealed class ApiSafeguardTests
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<DiscoverJesusDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<DiscoverJesusDbContext>>();
                 services.RemoveAll<DiscoverJesusDbContext>();
                 services.AddDbContext<DiscoverJesusDbContext>(
                     options => options.UseInMemoryDatabase(_databaseName));
             });
+            builder.ConfigureTestServices(services =>
+                services.AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = TestAuthenticationHandler.SchemeName;
+                    options.DefaultChallengeScheme = TestAuthenticationHandler.SchemeName;
+                    options.DefaultForbidScheme = TestAuthenticationHandler.SchemeName;
+                }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                    TestAuthenticationHandler.SchemeName,
+                    _ => { }));
+        }
+
+        public new HttpClient CreateClient()
+        {
+            var client = base.CreateClient();
+            ConfigureTestClient(client);
+            return client;
+        }
+
+        private static void ConfigureTestClient(HttpClient client)
+        {
+            client.DefaultRequestHeaders.Add("X-Test-Auth", "enabled");
+            client.DefaultRequestHeaders.Add("X-CSRF-Token", TestAuthenticationHandler.CsrfToken);
         }
     }
 }

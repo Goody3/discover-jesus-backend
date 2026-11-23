@@ -21,6 +21,11 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
     public DbSet<AuthorAccount> AuthorAccounts => Set<AuthorAccount>();
     public DbSet<AuthorGrant> AuthorGrants => Set<AuthorGrant>();
     public DbSet<AuthorAccountAudit> AuthorAccountAudits => Set<AuthorAccountAudit>();
+    public DbSet<AuthorPasskeyInvitation> AuthorPasskeyInvitations => Set<AuthorPasskeyInvitation>();
+    public DbSet<AuthorPasskey> AuthorPasskeys => Set<AuthorPasskey>();
+    public DbSet<AuthorWebAuthnChallenge> AuthorWebAuthnChallenges => Set<AuthorWebAuthnChallenge>();
+    public DbSet<AuthorWebSession> AuthorWebSessions => Set<AuthorWebSession>();
+    public DbSet<EditorialAuditRecord> EditorialAuditRecords => Set<EditorialAuditRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,8 +52,75 @@ public sealed class DiscoverJesusDbContext(DbContextOptions<DiscoverJesusDbConte
             entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(audit => audit.AccountId)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.ToTable(table => table.HasCheckConstraint("CK_AuthorAccountAudits_ActionRole",
-                "([Action] IN (1, 4) AND [Role] IS NULL) OR " +
+                "([Action] IN (1, 4, 5, 6, 7, 8) AND [Role] IS NULL) OR " +
                 "([Action] IN (2, 3) AND [Role] IS NOT NULL AND [Role] IN (1, 2))"));
+        });
+
+        modelBuilder.Entity<AuthorPasskeyInvitation>(entity =>
+        {
+            entity.HasKey(invitation => invitation.Id);
+            entity.Property(invitation => invitation.TokenHash)
+                .HasColumnType("char(64)").IsUnicode(false).IsRequired();
+            entity.Property(invitation => invitation.Version).IsConcurrencyToken();
+            entity.HasIndex(invitation => invitation.TokenHash).IsUnique();
+            entity.HasIndex(invitation => new { invitation.AccountId, invitation.ExpiresAt });
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(invitation => invitation.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<AuthorPasskey>(entity =>
+        {
+            entity.HasKey(passkey => passkey.Id);
+            entity.Property(passkey => passkey.CredentialIdHash)
+                .HasColumnType("char(64)").IsUnicode(false).IsRequired();
+            entity.Property(passkey => passkey.CredentialId).HasColumnType("varbinary(max)").IsRequired();
+            entity.Property(passkey => passkey.PublicKey).HasColumnType("varbinary(max)").IsRequired();
+            entity.Property(passkey => passkey.Name).HasMaxLength(100).IsRequired();
+            entity.HasIndex(passkey => passkey.CredentialIdHash).IsUnique();
+            entity.HasIndex(passkey => new { passkey.AccountId, passkey.RevokedAt });
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(passkey => passkey.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<AuthorWebAuthnChallenge>(entity =>
+        {
+            entity.HasKey(challenge => challenge.Id);
+            entity.Property(challenge => challenge.OptionsJson).HasColumnType("nvarchar(max)").IsRequired();
+            entity.Property(challenge => challenge.Version).IsConcurrencyToken();
+            entity.HasIndex(challenge => new { challenge.Purpose, challenge.ExpiresAt });
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(challenge => challenge.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AuthorPasskeyInvitation>().WithMany().HasForeignKey(challenge => challenge.InvitationId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AuthorWebSession>().WithMany().HasForeignKey(challenge => challenge.SessionId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<AuthorWebSession>(entity =>
+        {
+            entity.HasKey(session => session.Id);
+            entity.Property(session => session.SessionTokenHash)
+                .HasColumnType("char(64)").IsUnicode(false).IsRequired();
+            entity.Property(session => session.CsrfTokenHash)
+                .HasColumnType("char(64)").IsUnicode(false).IsRequired();
+            entity.HasIndex(session => session.SessionTokenHash).IsUnique();
+            entity.HasIndex(session => new { session.AccountId, session.RevokedAt, session.ExpiresAt });
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(session => session.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AuthorPasskey>().WithMany().HasForeignKey(session => session.CredentialId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<EditorialAuditRecord>(entity =>
+        {
+            entity.HasKey(record => record.Id);
+            entity.Property(record => record.ResourceType).HasMaxLength(64).IsRequired();
+            entity.Property(record => record.ResourceId).HasMaxLength(128).IsRequired();
+            entity.HasIndex(record => new { record.AccountId, record.OccurredAt });
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_EditorialAuditRecords_Action", "[Action] IN (1, 2, 3)"));
+            entity.HasOne<AuthorAccount>().WithMany().HasForeignKey(record => record.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<Page>(entity =>

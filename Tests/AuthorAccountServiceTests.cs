@@ -41,6 +41,29 @@ public sealed class AuthorAccountServiceTests
         Assert.False(await service.SetGrantAsync(id, AuthorRole.DraftEditor, true, actor, ct));
         Assert.Equal(AuthorRole.DraftEditor, (await db.AuthorGrants.SingleAsync()).Role);
         Assert.True(await service.SetGrantAsync(id, AuthorRole.Publisher, true, actor, ct));
+        var passkeyId = Guid.NewGuid();
+        db.AuthorPasskeys.Add(new AuthorPasskey
+        {
+            Id = passkeyId,
+            AccountId = id,
+            CredentialIdHash = new string('A', 64),
+            CredentialId = [1, 2, 3],
+            PublicKey = [4, 5, 6],
+            Name = "test",
+            CreatedAt = now
+        });
+        db.AuthorWebSessions.Add(new AuthorWebSession
+        {
+            Id = Guid.NewGuid(),
+            AccountId = id,
+            CredentialId = passkeyId,
+            SessionTokenHash = new string('B', 64),
+            CsrfTokenHash = new string('C', 64),
+            CreatedAt = now,
+            LastActivityAt = now,
+            ExpiresAt = now.AddHours(8)
+        });
+        await db.SaveChangesAsync(ct);
         Assert.True(await service.SetGrantAsync(id, AuthorRole.DraftEditor, false, actor, ct));
         Assert.False(await service.SetGrantAsync(id, AuthorRole.DraftEditor, false, actor, ct));
         Assert.True(await service.DisableAsync(id, actor, ct));
@@ -55,6 +78,7 @@ public sealed class AuthorAccountServiceTests
         Assert.Equal(now, account.CreatedAt);
         Assert.Equal(now, account.DisabledAt);
         Assert.False(await db.AuthorGrants.AnyAsync());
+        Assert.Equal(now, (await db.AuthorWebSessions.SingleAsync()).RevokedAt);
         var audit = await db.AuthorAccountAudits.OrderBy(entry => entry.Id).ToListAsync();
         Assert.Equal(
             new (AuthorAccountAction, AuthorRole?)[]

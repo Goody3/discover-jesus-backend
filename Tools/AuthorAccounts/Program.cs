@@ -1,12 +1,14 @@
 using DiscoverJesus.Api.Data;
 using DiscoverJesus.Api.Models;
 using DiscoverJesus.Api.Services;
+using Fido2NetLib;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 const string usage = """
     Usage: AuthorAccounts <expected-server> <expected-database>
              provision | disable <account-id> | grant <account-id> <role> | revoke <account-id> <role>
+             invite <account-id> | list-passkeys <account-id> | revoke-passkey <account-id> <passkey-id>
     Roles: DraftEditor, Publisher. Set AuthorAccounts__ConnectionString separately.
     """;
 
@@ -25,6 +27,11 @@ if (args.Length < 3 || (args[2] switch
         "grant" or "revoke" => args.Length != 5 || !Guid.TryParse(args[3], out accountId)
             || accountId == Guid.Empty || !Enum.TryParse(args[4], out role)
             || !Enum.IsDefined(role) || role.ToString() != args[4],
+        "invite" or "list-passkeys" => args.Length != 4
+            || !Guid.TryParse(args[3], out accountId) || accountId == Guid.Empty,
+        "revoke-passkey" => args.Length != 5
+            || !Guid.TryParse(args[3], out accountId) || accountId == Guid.Empty
+            || !Guid.TryParse(args[4], out var parsedPasskeyId) || parsedPasskeyId == Guid.Empty,
         _ => true,
     }))
 {
@@ -63,6 +70,15 @@ try
     var actor = await db.Database.SqlQueryRaw<string>("SELECT ORIGINAL_LOGIN() AS [Value]")
         .SingleAsync(cancellation.Token);
     var service = new AuthorAccountService(db, TimeProvider.System);
+    var passkeyService = new PasskeyAuthenticationService(
+        db,
+        new Fido2(new Fido2Configuration
+        {
+            RPID = "localhost",
+            RPName = "Discover Jesus Content Studio",
+            Origins = new HashSet<string> { "http://localhost:5173" }
+        }),
+        TimeProvider.System);
 
     if (args[2] == "provision")
     {
@@ -71,6 +87,33 @@ try
         Console.WriteLine($"Provisioning account {newAccountId:D}.");
         await service.ProvisionAsync(newAccountId, actor, cancellation.Token);
         Console.WriteLine($"Provisioned {newAccountId:D} without authoring grants.");
+    }
+    else if (args[2] == "invite")
+    {
+        var token = await passkeyService.IssueInvitationAsync(accountId, actor, cancellation.Token);
+        Console.WriteLine($"One-time enrollment invitation (expires in 24 hours): {token}");
+        Console.WriteLine("Deliver this token out of band. It cannot be retrieved again.");
+    }
+    else if (args[2] == "list-passkeys")
+    {
+        var passkeys = await passkeyService.GetPasskeysForOperatorAsync(accountId, cancellation.Token);
+        foreach (var passkey in passkeys)
+        {
+            Console.WriteLine(
+                $"{passkey.Id:D}\t{passkey.Name}\t{passkey.CreatedAt:O}\t" +
+                $"{(passkey.LastUsedAt is DateTimeOffset lastUsed ? lastUsed.ToString("O") : "never used")}\t" +
+                $"{(passkey.RevokedAt is null ? "active" : $"revoked at {passkey.RevokedAt:O}")}");
+        }
+    }
+    else if (args[2] == "revoke-passkey")
+    {
+        var passkeyId = Guid.Parse(args[4]);
+        var changed = await passkeyService.RevokePasskeyForOperatorAsync(
+            accountId,
+            passkeyId,
+            actor,
+            cancellation.Token);
+        Console.WriteLine(changed ? "Passkey revoked." : "No active passkey matched the account and ID.");
     }
     else
     {
