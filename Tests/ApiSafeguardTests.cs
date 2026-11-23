@@ -82,6 +82,21 @@ public sealed class ApiSafeguardTests
 
         using var authoringLimit = await authoringClient.GetAsync("/api/pages/");
         Assert.Equal(HttpStatusCode.TooManyRequests, authoringLimit.StatusCode);
+
+        await using var authenticationFactory = new SafeguardTestApplication();
+        using var authenticationClient = authenticationFactory.CreateClient();
+        for (var request = 0; request < 10; request++)
+        {
+            using var response = await authenticationClient.PostAsync(
+                "/api/auth/sign-in/options",
+                content: null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        using var authenticationLimit = await authenticationClient.PostAsync(
+            "/api/auth/sign-in/options",
+            content: null);
+        Assert.Equal(HttpStatusCode.TooManyRequests, authenticationLimit.StatusCode);
     }
 
     [Fact]

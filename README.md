@@ -112,6 +112,8 @@ writes, publication, withdrawal, and deletion require `Publisher`. Editorial
 publication, withdrawal, and deletion records are persisted with the change
 and identify the authenticated account. The test-only identity handler is
 registered only by test hosts and is not available in a running application.
+Passkey invitation, sign-in, and registration ceremonies are limited to ten
+requests per minute per client IP; authoring routes are limited to thirty.
 
 ## Data model
 
