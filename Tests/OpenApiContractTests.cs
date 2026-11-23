@@ -66,6 +66,31 @@ public sealed class OpenApiContractTests
     }
 
     [Fact]
+    public async Task OpaqueRequestJsonRemainsOpenInTheOpenApiContract()
+    {
+        await using var factory = new ContractTestApplication();
+        using var client = factory.CreateClient();
+        var document = JsonNode.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"))!;
+        var schemas = document["components"]!["schemas"]!;
+
+        foreach (var (schemaName, propertyName) in new[]
+        {
+            ("ComponentRequest", "props"),
+            ("BindingRequest", "config"),
+            ("ActionRequest", "config"),
+            ("CreateReusableComponentRequest", "content"),
+            ("UpdateReusableComponentDraftRequest", "content")
+        })
+        {
+            Assert.IsType<JsonObject>(
+                schemas[schemaName]!["properties"]![propertyName]!["additionalProperties"]);
+        }
+
+        Assert.Null(
+            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]!["type"]);
+    }
+
+    [Fact]
     public async Task HealthResponseMatchesDocumentedShape()
     {
         await using var factory = new ContractTestApplication();

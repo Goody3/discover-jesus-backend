@@ -69,14 +69,18 @@ public sealed class RequestSchemaFilter : ISchemaFilter
         }
     }
 
-    private static void SetObject(OpenApiSchema schema, string propertyName) =>
-        GetProperty(schema, propertyName).Type = "object";
+    private static void SetObject(OpenApiSchema schema, string propertyName)
+    {
+        var property = GetProperty(schema, propertyName);
+        property.Type = "object";
+        property.AdditionalProperties = new OpenApiSchema();
+    }
 
     private static void SetArray(OpenApiSchema schema, string propertyName)
     {
         var property = GetProperty(schema, propertyName);
         property.Type = "array";
-        property.Items = new OpenApiSchema { Type = "object" };
+        property.Items = new OpenApiSchema();
     }
 
     private static OpenApiSchema GetProperty(OpenApiSchema schema, string propertyName) =>
