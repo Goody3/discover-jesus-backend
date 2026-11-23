@@ -3757,7 +3757,10 @@
         "properties": {
           "sections": {
             "type": "array",
-            "items": { }
+            "items": {
+              "type": "object",
+              "additionalProperties": { }
+            }
           }
         },
         "additionalProperties": false

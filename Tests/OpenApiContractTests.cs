@@ -86,8 +86,13 @@ public sealed class OpenApiContractTests
                 schemas[schemaName]!["properties"]![propertyName]!["additionalProperties"]);
         }
 
-        Assert.Null(
-            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]!["type"]);
+        Assert.Equal(
+            "object",
+            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]!["type"]!
+                .GetValue<string>());
+        Assert.IsType<JsonObject>(
+            schemas["UpdatePageContentDraftRequest"]!["properties"]!["sections"]!["items"]![
+                "additionalProperties"]);
     }
 
     [Fact]

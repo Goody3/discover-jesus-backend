@@ -80,7 +80,11 @@ public sealed class RequestSchemaFilter : ISchemaFilter
     {
         var property = GetProperty(schema, propertyName);
         property.Type = "array";
-        property.Items = new OpenApiSchema();
+        property.Items = new OpenApiSchema
+        {
+            Type = "object",
+            AdditionalProperties = new OpenApiSchema()
+        };
     }
 
     private static OpenApiSchema GetProperty(OpenApiSchema schema, string propertyName) =>
