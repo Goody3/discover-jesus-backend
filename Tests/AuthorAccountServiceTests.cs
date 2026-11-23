@@ -36,10 +36,12 @@ public sealed class AuthorAccountServiceTests
         var ct = CancellationToken.None;
 
         await service.ProvisionAsync(id, actor, ct);
-        Assert.False(await db.AuthorGrants.AnyAsync());
+        Assert.False(await db.AuthorGrants.AnyAsync(grant => grant.AccountId == id));
         Assert.True(await service.SetGrantAsync(id, AuthorRole.DraftEditor, true, actor, ct));
         Assert.False(await service.SetGrantAsync(id, AuthorRole.DraftEditor, true, actor, ct));
-        Assert.Equal(AuthorRole.DraftEditor, (await db.AuthorGrants.SingleAsync()).Role);
+        Assert.Equal(
+            AuthorRole.DraftEditor,
+            (await db.AuthorGrants.SingleAsync(grant => grant.AccountId == id)).Role);
         Assert.True(await service.SetGrantAsync(id, AuthorRole.Publisher, true, actor, ct));
         var passkeyId = Guid.NewGuid();
         db.AuthorPasskeys.Add(new AuthorPasskey
@@ -73,13 +75,18 @@ public sealed class AuthorAccountServiceTests
         Assert.True(await service.SetGrantAsync(id, AuthorRole.Publisher, false, actor, ct));
 
         db.ChangeTracker.Clear();
-        var account = await db.AuthorAccounts.SingleAsync();
+        var account = await db.AuthorAccounts.SingleAsync(item => item.Id == id);
         Assert.Equal(id, account.Id);
         Assert.Equal(now, account.CreatedAt);
         Assert.Equal(now, account.DisabledAt);
-        Assert.False(await db.AuthorGrants.AnyAsync());
-        Assert.Equal(now, (await db.AuthorWebSessions.SingleAsync()).RevokedAt);
-        var audit = await db.AuthorAccountAudits.OrderBy(entry => entry.Id).ToListAsync();
+        Assert.False(await db.AuthorGrants.AnyAsync(grant => grant.AccountId == id));
+        Assert.Equal(
+            now,
+            (await db.AuthorWebSessions.SingleAsync(session => session.AccountId == id)).RevokedAt);
+        var audit = await db.AuthorAccountAudits
+            .Where(entry => entry.AccountId == id)
+            .OrderBy(entry => entry.Id)
+            .ToListAsync();
         Assert.Equal(
             new (AuthorAccountAction, AuthorRole?)[]
             {
